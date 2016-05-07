@@ -27,6 +27,11 @@ ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
     for (var i=0; i<12; i++) this.bytes[i] = buf[base+i];
     return this;
 }
+ObjectId.prototype = ObjectId.prototype;        // accelerate access
+
+function bson_decode( buf ) {
+    return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
+}
 
 function getBsonEntities( buf, base0, bound, target, asArray ) {
     var s0 = { val: 0, end: 0 }, s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
@@ -34,6 +39,7 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
     var base = base0;
     while (base < bound) {
 
+        base0 = base;
         type = buf[base++];
         if (asArray) scanInt(buf, base, s0);
         else scanString(buf, base, s0);
@@ -46,20 +52,20 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
             base += 4;
             break;
         case 0x02:      // counted utf8 string, length *not* part of count
-            var len = getLength(buf, base);
+            var len = getUInt32(buf, base);
             base += 4;
             var end = base + len - 1;
-            target[name] = (len < 0) ? getString(buf, base, end) : buf.toString('utf8', base, end);
+            target[name] = (len < 10) ? getString(buf, base, end) : buf.toString('utf8', base, end);
             base = end + 1;
             if (buf[base-1] !== 0) throwError(new Error("invalid bson, string at " + base-len-4 + " not zero terminated"));
             break;
         case 0x03:      // object, length part of count
-            var len = getLengthZ(buf, base, 'object');
+            var len = getUInt32(buf, base, 'object');
             target[name] = getBsonEntities(buf, base+4, base+len-1, new Object());
             base += len;
             break;
         case 0x04:      // array, length part of count
-            var len = getLengthZ(buf, base, 'array');
+            var len = getUInt32(buf, base, 'array');
             target[name] = getBsonEntities(buf, base+4, base+len-1, new Array(), true);
             base += len;
             break;
@@ -75,21 +81,13 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
             target[name] = null;
             break;
         case 0x05:      // binary
-            var len = getLength(buf, base);
+            var len = getUInt32(buf, base);
             var subtype = buf[base+4];
-            // TODO: why does bson wrapper the returned Buffer in an object?
+            // TODO: why does bson return the Buffer wrappered in an object?
             // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
-            if (subtype === 0) {
-                //target[name] = new Buffer(buf.slice(base+5, base+5+len)); // 30s
-                target[name] = buf.slice(base+5, base+5+len);   // 1s
-            }
-            else target[name] = {
-                _bsontype: 'Binary',
-                sub_type: subtype,
-                position: base,
-                //buffer: new Buffer(buf.slice(base+5, base+5+len)),      // 20s
-                buffer: buf.slice(base+5, base+5+len),  // 1s
-            };
+            target[name] = buf.slice(base+5, base+5+len);   // 1s (a new Buffer is 30s)
+            // instead of wrappering, annotate the buffer with .subtype like buffalo does
+            if (subtype !== 0) target[name].subtype = subtype;
             base = base + 5 + len;
             break;
         case 0x06:      // deprecated (undefined)
@@ -106,13 +104,31 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
         case 0x0b:      // RegExp()
             // YIKES!  bson 0.3.2 encodes \x00 in the regex as a zero byte, which breaks the bson string!!
             // it needs to be overlong-encoded as <C0 80> for it to work correctly
+            // (bson seems to recover scanning the bytes, just breaks the regex pattern)
             // % node -p 'bson = require("bson"); bson.BSONPure.BSON.serialize({a: new RegExp("fo\x00[o]", "i")});'
             // <Buffer 11 00 00 00 0b 61 00 66 6f 00 5b 6f 5d 00 69 00 00>
-            //                        a     f  o  ^^ [  o  ]     i
+            //                        a:    f  o  ^^ [  o  ]     /i
             scanStringUtf8(buf, base, s1);
             scanStringUtf8(buf, s1.end + 1, s2);
-            target[name] = new RegExp(s1.val, s2.val);
+            try { target[name] = new RegExp(s1.val, s2.val); }
+            catch (err) { target[name] = new RegExp(s1.val); }
             base = s2.end + 1;
+
+            // hack: try to find the actual end of the regex entity.  The next entity will
+            // begin at a type code following a 00 following a valid regex flag 0x00 or [imx].
+            // The type codes MIN_KEY and MAX_KEY not supported.  bson searches similarly.
+            // TODO: given the actual end, can work backward to recover actual flags and pattern.
+            // TODO: having to find the end runs 10x slower!
+            if (buf[base] === 0 || buf[base] > 0x12) {
+                // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
+                while (base < bound) {
+                    if (buf[base]) base++;              // find 00
+                    else if (buf[++base] <= 0x12) {     // followed by type code
+                        var ch = buf[base-2];           // after a 00 or [imx]
+                        if (ch === 0x00 || ch === 0x69 || ch === 0x6d || ch == 0x78) break;
+                    }
+                }
+            }
             break;
         case 0x12:      // int64
             target[name] = getInt64(buf, base);
@@ -136,33 +152,8 @@ function throwError( err ) {
     throw err;
 }
 
-function parseBsonObject( buf ) {
-    return getBsonEntities(buf, 4, getLength(buf, 0) - 1, new Object());
-}
-
-function parseBsonArray( buf ) {
-    return getBsonEntities(buf, 4, getLength(buf, 0) - 1, new Array());
-}
-
-function indexOfZero( buf, pos ) {
-    //while (buf.get(pos)) pos++;
-    while (buf[pos]) pos++;
-    return pos;
-}
-
-function getLengthZ( buf, pos, entityType ) {
-    var len = getLength(buf, pos);
-    if (buf[pos+len-1] !== 0) throw new Error("invalid bson, " + entityType + " at " + pos + " not zero terminated");
-    return len;
-}
-
-function isAscii( buf, base, bound ) {
-    for (var i=base; i<bound; i++) if (buf[i] >= 128) return false;
-    return true;
-}
-
 function getAsciiZ( buf, base, bound ) {
-    // faster to concat 1-char strings than to buf.slice.toString
+    // for short strings is faster to concat chars than to buf.slice.toString
     var str = "";
     for (var i=base; i<bound; i++) str += String.fromCharCode(buf[i]);
     return str;
@@ -172,7 +163,7 @@ function getAsciiZ( buf, base, bound ) {
 // The bytes are expected to be valid utf8, no checking is done.
 // Handles utf16 only (16-bit code points), same as javascript.
 // Note: faster for short strings, slower for long strings
-// Note: generates much more gc activity than buf.toString
+// Note: generates more gc activity than buf.toString
 function getString( buf, base, bound ) {
     var str = "", code;
     for (var i=base; i<bound; i++) {
@@ -182,10 +173,6 @@ function getString( buf, base, bound ) {
         else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
     }
     return str;
-}
-
-function getLength( buf, pos ) {
-    return getUInt32(buf, pos);
 }
 
 function getUInt32( buf, pos ) {
@@ -333,6 +320,8 @@ var data = "ssssssssss";                // -1% @10
 var data = "ssssssssssssssssssss";      // -1% @10 (using buf.toString)
 var data = "ssss\u1234ssss";            // -1% @10 (buf.toString), -26% own; 4% w toString() for names
 var data = "ssss";                      // 15% @10 own ; 5% w toString (25% slower on v0.10.42, and 2x slower if own scan)
+var data = new RegExp("fo\x00o\x00x\x03\x00", "i");
+var data = new RegExp("foo", "i");
 
 var o = new Object();
 for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;
@@ -347,16 +336,16 @@ var x = BSON.serialize(o, false, true);
 
 //console.log("AR: encoded", x = BSON.serialize({a: 5.25}));
 //console.log("AR: decoded", BSON.deserialize(x));
-//console.log("AR: parsed", parseBsonObject(BSON.serialize(o), 0));
+//console.log("AR: parsed", bson_decode(BSON.serialize(o), 0));
 
 console.log(x);
-//console.log("AR: test", parseBsonObject(x, 0));
+//console.log("AR: test", bson_decode(x, 0));
 
 console.log(x.length, ":", x, getFloat(x, 7));
-var a = BSON.deserialize(x);
-var a = buffalo.parse(x);
+//var a = BSON.deserialize(x);
+//var a = buffalo.parse(x);
 t1 = fptime();
-for (i=0; i<100000; i++) {
+for (i=0; i<10000; i++) {
   //x = BSON.serialize(o, false, true);
   // 46k/s 3-item, 30k/s 6-item
   //x = BSON.serialize(o);
@@ -364,20 +353,20 @@ for (i=0; i<100000; i++) {
 
 //  a = BSON.deserialize(x);
 //  a = buffalo.parse(x);
-  a = parseBsonObject(x);
+  a = bson_decode(x);
   // 360k/s 3-item, 125k/s 6-item (95-135k/s, variable) (kvm, 159-170k/s hw)
   // v5: 164k/s 3.5GHz AMD
   // v5: 70k/s for Kobj (81k/s v6)
 //  a = buffalo.parse(x);
   // 390k/s 3-item (kvm)
-//  a = parseBsonObject(x);
+//  a = bson_decode(x);
   // 575k/s 3-item (kvm, 720k/s hw)
   // 192-195k/s 6-item hw
   // 7% faster for 6-item kds row
   // v5: 182k/s 3.5GHz AMD (11% faster)
   // v5: 81k/s for Kobj (97k/s v6)
 }
-console.log("AR: time for 100k: %d ms", fptime() - t1, process.memoryUsage(), a);
+console.log("AR: time for 100k: %d ms", fptime() - t1, process.memoryUsage(), a[Object.keys(a)[0]]);
 // init version: 22% faster, 20% less gc (?), less mem used
 
 
