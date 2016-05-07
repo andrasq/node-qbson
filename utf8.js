@@ -85,7 +85,8 @@ function encodeUtf8( string, from, to, target, offset ) {
 }
 
 
-/** quicktest:
+if (process.env['NODE_TEST'] === 'utf8') {
+///** quicktest:
 
 var assert = require('assert');
 var timeit = require('qtimeit');
@@ -137,3 +138,4 @@ for (var i=0; i<0x10000; i++) {
 // test: compatibility of json coding with JSON.parse()
 
 /**/
+}

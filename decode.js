@@ -1,5 +1,5 @@
 /**
- * fledgeling bson parser
+ * fledgeling bson decoder
  *
  * for timings, to see how much room there is for bson speedup
  * (not that much... maybe 20-30%, but {...} and esp [...] are much faster)
@@ -7,6 +7,8 @@
  * Copyright (C) 2015-2016 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
+
+module.exports = bson_decode;
 
 function ObjectId( ) {
     // TODO: also use to generate and return an id??
@@ -282,6 +284,7 @@ function scanHex( buf, base, bound ) {
 
 
 // quicktest:
+if (process.env['NODE_TEST'] === 'decode') {
 ///**
 var timeit = require('qtimeit');
 
@@ -415,3 +418,4 @@ var BINARY_USER_DEFINED_SUBTYPE = 0x80
 
 
 /**/
+}
