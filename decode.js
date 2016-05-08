@@ -19,17 +19,15 @@ function bson_decode( buf ) {
 }
 
 function getBsonEntities( buf, base0, bound, target, asArray ) {
-    var s0 = { val: 0, end: 0 }, s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
+    var s0 = { val: 0, end: 0 };
     var type, subtype, name, len;
     var base = base0;
     while (base < bound) {
 
-        base0 = base;
         type = buf[base++];
-        if (asArray) scanInt(buf, base, s0);
-        else scanString(buf, base, s0);
+        (asArray) ? scanInt(buf, base, s0) : scanString(buf, base, s0);
         name = s0.val;
-        base = s0.end + 1;
+        base = s0.end + 1;  // skip string + NUL
 
         switch (type) {
         case 0x10:      // signed 32-bit little-endian int (10%)
@@ -87,33 +85,9 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
             base += 8;
             break;
         case 0x0b:      // RegExp()
-            // YIKES!  bson 0.3.2 encodes \x00 in the regex as a zero byte, which breaks the bson string!!
-            // it needs to be overlong-encoded as <C0 80> for it to work correctly
-            // (bson seems to recover scanning the bytes, just breaks the regex pattern)
-            // % node -p 'bson = require("bson"); bson.BSONPure.BSON.serialize({a: new RegExp("fo\x00[o]", "i")});'
-            // <Buffer 11 00 00 00 0b 61 00 66 6f 00 5b 6f 5d 00 69 00 00>
-            //                        a:    f  o  ^^ [  o  ]     /i
-            scanStringUtf8(buf, base, s1);
-            scanStringUtf8(buf, s1.end + 1, s2);
-            try { target[name] = new RegExp(s1.val, s2.val); }
-            catch (err) { target[name] = new RegExp(s1.val); }
-            base = s2.end + 1;
-
-            // hack: try to find the actual end of the regex entity.  The next entity will
-            // begin at a type code following a 00 following a valid regex flag 0x00 or [imx].
-            // The type codes MIN_KEY and MAX_KEY not supported.  bson searches similarly.
-            // TODO: given the actual end, can work backward to recover actual flags and pattern.
-            // TODO: having to find the end runs 10x slower!
-            if (buf[base] === 0 || buf[base] > 0x12) {
-                // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
-                while (base < bound) {
-                    if (buf[base]) base++;              // find 00
-                    else if (buf[++base] <= 0x12) {     // followed by type code
-                        var ch = buf[base-2];           // after a 00 or [imx]
-                        if (ch === 0x00 || ch === 0x69 || ch === 0x6d || ch == 0x78) break;
-                    }
-                }
-            }
+            scanRegExp(buf, base, s0);
+            target[name] = s0.val;
+            base = item.end + 1;
             break;
         case 0x12:      // int64
             target[name] = getInt64(buf, base);
@@ -137,22 +111,15 @@ function throwError( err ) {
     throw err;
 }
 
-function getAsciiZ( buf, base, bound ) {
-    // for short strings is faster to concat chars than to buf.slice.toString
-    var str = "";
-    for (var i=base; i<bound; i++) str += String.fromCharCode(buf[i]);
-    return str;
-}
-
 // recover the utf8 string between base and bound
 // The bytes are expected to be valid utf8, no checking is done.
 // Handles utf16 only (16-bit code points), same as javascript.
 // Note: faster for short strings, slower for long strings
 // Note: generates more gc activity than buf.toString
 function getString( buf, base, bound ) {
-    var str = "", code;
+    var ch, str = "", code;
     for (var i=base; i<bound; i++) {
-        var ch = buf[i];
+        ch = buf[i];
         if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
         else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
         else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
@@ -239,9 +206,10 @@ function scanString( buf, base, item ) {
     return item.val = buf.toString('utf8', base, i);
 }
 
+// get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
 // concatenating chars generates more gc activity, and is only faster for short strings
 function scanStringUtf8( buf, base, item ) {
-    var str = "", code;
+    var ch, str = "", code;
     for (var i=base; buf[i]; i++) {
         ch = buf[i];
         if (ch < 0x80) str += String.fromCharCode(ch);
@@ -251,6 +219,50 @@ function scanStringUtf8( buf, base, item ) {
     }
     item.val = str;
     item.end = i;
+}
+
+// extract a regular expression from the bson buffer
+    // YIKES!  bson 0.3.2 encodes \x00 in the regex as a zero byte, which breaks the bson string!!
+    // it needs to be overlong-encoded as <C0 80> for it to work correctly
+    // (bson seems to recover scanning the bytes, just breaks the regex pattern)
+    // % node -p 'bson = require("bson"); bson.BSONPure.BSON.serialize({a: new RegExp("fo\x00[o]", "i")});'
+    // <Buffer 11 00 00 00 0b 61 00 66 6f 00 5b 6f 5d 00 69 00 00>
+    //                        a:    f  o  ^^ [  o  ]     /i
+    // hack: try to find the actual end of the regex entity.  The next entity will
+    // begin at a type code following a 00 following a valid regex flag 0x00 or [imx].
+    // The type codes MIN_KEY and MAX_KEY not supported.  bson searches similarly.
+    // TODO: given the actual end, can work backward to recover actual flags and pattern.
+    // TODO: having to find the end runs 10x slower!
+    // Approach:
+    // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
+    // Having to run the hack loop is hugely slower.
+function scanRegExp( buf, base, item ) {
+    var s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
+    // extract
+    scanStringUtf8(buf, base, s1);
+    scanStringUtf8(buf, s1.end + 1, s2);
+    item.val = createRegExp(s1.val, s2.val);
+    base = s2.end + 1;
+
+    // hack
+    if (buf[base] === 0 || buf[base] > 0x12) {
+        while (base < bound) {
+            if (buf[base]) base++;              // find 00
+            else if (buf[++base] <= 0x12) {     // followed by type code
+                var ch = buf[base-2];           // after a 00 or [imx]
+                if (ch === 0x00 || ch === 0x69 || ch === 0x6d || ch == 0x78) break;
+            }
+        }
+    }
+    item.end = base;
+}
+
+function createRegExp( pattern, flags ) {
+    try {
+        return new RegExp(pattern, flags);
+    } catch (err) {
+        return new RegExp(pattern);
+    }
 }
 
 
@@ -282,10 +294,11 @@ var o = {
 
 var data = new Date();                  // 16% (10% on 8, 16% on 10, 8% on 20)
 var data = {a:1, b:2, c:3, d:4, e:5};   // 99% v5, 211% v6 (1.03 sec v5, but 2.3 sec v0.10 !?)
+// cannot reproduce ?? (retimed at 15%)
 var data = 12345;                       // 6%
 var data = 1234.5;                      // 13%
 var data = /fo[o]/i;                    // 33%
-// (note: bson and buffalo recover binary as type Binary { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data })
+// (note: bson recovers binary as type Binary { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data })
 var data = new Buffer("ABCDE");         // 12%
 var data = new Buffer(66000);           // 15% (or 20x ?? ...can not reproduce??)
 var data = bson.ObjectID();             // 25% own scanString, 17% toString() for property names
@@ -294,14 +307,20 @@ var data = "ssssssssss";                // -1% @10
 var data = "ssssssssssssssssssss";      // -1% @10 (using buf.toString)
 var data = "ssss\u1234ssss";            // -1% @10 (buf.toString), -26% own; 4% w toString() for names
 var data = "ssss";                      // 15% @10 own ; 5% w toString (25% slower on v0.10.42, and 2x slower if own scan)
-var data = new RegExp("fo\x00o\x00x\x03\x00", "i");
+var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // FIXME: used to work, now breaks?!
 var data = new RegExp("foo", "i");
 var data = o;
+
+var data = 1234.5;                      // 13%
+var data = o;
+var data = {a:1, b:2, c:3, d:4, e:5};   // 99% v5, 211% v6 (1.03 sec v5, but 2.3 sec v0.10 !?)
+var data = [1,2,3,4,5];
+
 
 var o = new Object();
 for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;
 
-function fptime() { var t = process.hrtime(); return t[0] + t[1] * 1e-9; }
+var fptime = function fptime() { var t = process.hrtime(); return t[0] + t[1] * 1e-9; }
 var x = BSON.serialize(o, false, true);
 //console.log("AR: bson =", x);
 //var x = BSON.serialize({a: 1, b: 2, c: [1,2,3], d: 4, e: 5});
@@ -321,7 +340,7 @@ console.log(x.length, ":", x, getFloat(x, 7));
 //var a = buffalo.parse(x);
 var a;
 var t1 = fptime();
-for (i=0; i<10000; i++) {
+for (i=0; i<100000; i++) {
   //x = BSON.serialize(o, false, true);
   // 46k/s 3-item, 30k/s 6-item
   //x = BSON.serialize(o);
@@ -342,9 +361,16 @@ for (i=0; i<10000; i++) {
   // v5: 182k/s 3.5GHz AMD (11% faster)
   // v5: 81k/s for Kobj (97k/s v6)
 }
-console.log("AR: time for 100k: %d ms", fptime() - t1, process.memoryUsage(), a[Object.keys(a)[0]]);
+var t2 = fptime();
+console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[Object.keys(a)[0]]);
 // init version: 22% faster, 20% less gc (?), less mem used
 
+// warm up the heap (?)... throws off the 2nd timing run if not
+timeit(10000, function(){ a = bson_decode(x) });
+
+timeit(10000, function(){ a = BSON.deserialize(x) });
+timeit(10000, function(){ a = bson_decode(x) });
+timeit(10000, function(){ a = buffalo.parse(x) });
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
