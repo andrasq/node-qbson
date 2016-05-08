@@ -8,28 +8,11 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+'use strict';
+
 module.exports = bson_decode;
 
-function ObjectId( ) {
-    // TODO: also use to generate and return an id??
-}
-ObjectId.prototype.bytes = 0;
-var _convBuf = new Buffer(12);
-ObjectId.prototype.toString = function toString( ) {            // value for string context (eg "" +)
-    return scanHex(this.bytes, 0, 12);
-    // else:
-    for (var i=0; i<12; i++) _convBuf[i] = this.bytes[i];
-    return _convBuf.toString('hex');
-}
-ObjectId.prototype.toJSON = ObjectId.prototype.toString;        // value for JSON.stringify
-ObjectId.prototype.inspect = ObjectId.prototype.toString;       // value for console.log
-ObjectId.prototype = ObjectId.prototype;
-ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
-    this.bytes = new Array(12);
-    for (var i=0; i<12; i++) this.bytes[i] = buf[base+i];
-    return this;
-}
-ObjectId.prototype = ObjectId.prototype;        // accelerate access
+var ObjectId = require('./object-id.js');
 
 function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
@@ -62,12 +45,12 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
             if (buf[base-1] !== 0) throwError(new Error("invalid bson, string at " + base-len-4 + " not zero terminated"));
             break;
         case 0x03:      // object, length part of count
-            var len = getUInt32(buf, base, 'object');
+            var len = getUInt32(buf, base);
             target[name] = getBsonEntities(buf, base+4, base+len-1, new Object());
             base += len;
             break;
         case 0x04:      // array, length part of count
-            var len = getUInt32(buf, base, 'array');
+            var len = getUInt32(buf, base);
             target[name] = getBsonEntities(buf, base+4, base+len-1, new Array(), true);
             base += len;
             break;
@@ -169,7 +152,7 @@ function getAsciiZ( buf, base, bound ) {
 function getString( buf, base, bound ) {
     var str = "", code;
     for (var i=base; i<bound; i++) {
-        ch = buf[i];
+        var ch = buf[i];
         if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
         else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
         else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
@@ -270,18 +253,6 @@ function scanStringUtf8( buf, base, item ) {
     item.end = i;
 }
 
-// extract the byte range as a hex string
-var hexdigits = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' ];
-var hexpairs = new Array(); for (var i=0; i<256; i++) hexpairs[i] = ((i < 16 ? '0' : '') + i.toString(16));
-function scanHex( buf, base, bound ) {
-    var str = "";
-    for (var i=base; i<bound; i++) {
-        //str += hexdigits[buf[i] >> 4] + hexdigits[buf[i] & 0x0F];
-        str += hexpairs[buf[i]];
-    }
-    return str;
-}
-
 
 // quicktest:
 if (process.env['NODE_TEST'] === 'decode') {
@@ -325,6 +296,7 @@ var data = "ssss\u1234ssss";            // -1% @10 (buf.toString), -26% own; 4% 
 var data = "ssss";                      // 15% @10 own ; 5% w toString (25% slower on v0.10.42, and 2x slower if own scan)
 var data = new RegExp("fo\x00o\x00x\x03\x00", "i");
 var data = new RegExp("foo", "i");
+var data = o;
 
 var o = new Object();
 for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;
@@ -347,7 +319,8 @@ console.log(x);
 console.log(x.length, ":", x, getFloat(x, 7));
 //var a = BSON.deserialize(x);
 //var a = buffalo.parse(x);
-t1 = fptime();
+var a;
+var t1 = fptime();
 for (i=0; i<10000; i++) {
   //x = BSON.serialize(o, false, true);
   // 46k/s 3-item, 30k/s 6-item

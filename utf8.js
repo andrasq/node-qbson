@@ -76,6 +76,9 @@ function encodeUtf8( string, from, to, target, offset ) {
     for (var i=from; i<to; i++) {
         code = string.charCodeAt(i);
         if (code < 0x80) target[offset++] = code;
+        // overlong encode 0x00 to fix RegExp in BSON... except BSON reads it as two chars ?!
+        // also, writing is as <00> matches buf.write()
+        //if (code < 0x80) { if (code) target[offset++] = code; else { target[offset++] = 0xC0; target[offset++] = 0x80; } }
         else if (code >= 0xD800 && code <= 0xDFFF) {
             target[offset++] = 0xEF; target[offset++] = 0xBF; target[offset++] = 0xBD;
         }

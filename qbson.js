@@ -9,10 +9,11 @@
 
 'use strict';
 
+var encode = require('./encode.js');
 var decode = require('./decode.js');
 
 module.exports = {
-    encode: null,
+    encode: encode,
     decode: decode,
     toJSON: null,
 };
