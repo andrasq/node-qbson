@@ -18,12 +18,12 @@ function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
 }
 
-function getBsonEntities( buf, base0, bound, target, asArray ) {
+function getBsonEntities( buf, base, bound, target, asArray ) {
     var s0 = { val: 0, end: 0 };
-    var type, subtype, name, len;
-    var base = base0;
-    while (base < bound) {
+    var type, subtype, name, len, start;
 
+    while (base < bound) {
+        start = base;
         type = buf[base++];
         (asArray) ? scanInt(buf, base, s0) : scanString(buf, base, s0);
         name = s0.val;
@@ -40,7 +40,7 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
             var end = base + len - 1;
             target[name] = (len < 10) ? getString(buf, base, end) : buf.toString('utf8', base, end);
             base = end + 1;
-            if (buf[base-1] !== 0) throwError(new Error("invalid bson, string at " + base-len-4 + " not zero terminated"));
+            if (buf[base-1] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
             break;
         case 0x03:      // object, length part of count
             var len = getUInt32(buf, base);
@@ -66,12 +66,13 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
         case 0x05:      // binary
             var len = getUInt32(buf, base);
             var subtype = buf[base+4];
+            base += 5;
+            target[name] = buf.slice(base, base+len);
+            if (subtype !== 0) target[name].subtype = subtype;
+            base += len;
             // TODO: why does bson return the Buffer wrappered in an object?
             // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
-            target[name] = buf.slice(base+5, base+5+len);   // 1s (a new Buffer is 30s)
-            // instead of wrappering, annotate the buffer with .subtype like buffalo does
-            if (subtype !== 0) target[name].subtype = subtype;
-            base = base + 5 + len;
+            // we annotate with .subtype like `buffalo` does
             break;
         case 0x06:      // deprecated (undefined)
             target[name] = undefined
@@ -98,17 +99,12 @@ function getBsonEntities( buf, base0, bound, target, asArray ) {
         case 0x0f:      // code with scope
         case 0x11:      // timestamp
         default:
-            throwError(new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + base));
+            throw new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + start);
             break;
         }
-        if (base > bound) throwError(new Error("truncated bson, overran end from " + base0));
+        if (base > bound) throw new Error("truncated bson, overran end from " + start);
     }
-    if (base !== bound) throwError(new Error("invalid bson, bad length starting at " + base0));
     return target;
-}
-
-function throwError( err ) {
-    throw err;
 }
 
 // recover the utf8 string between base and bound
