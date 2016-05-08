@@ -86,9 +86,9 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             base += 8;
             break;
         case 0x0b:      // RegExp()
-            scanRegExp(buf, base, s0);
+            scanRegExp(buf, base, bound, s0);
             target[name] = s0.val;
-            base = item.end + 1;
+            base = s0.end;
             break;
         case 0x12:      // int64
             target[name] = getInt64(buf, base);
@@ -232,7 +232,7 @@ function scanStringUtf8( buf, base, item ) {
     // Approach:
     // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
     // Having to run the hack loop is hugely slower.
-function scanRegExp( buf, base, item ) {
+function scanRegExp( buf, base, bound, item ) {
     var s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
     // extract
     scanStringUtf8(buf, base, s1);
@@ -344,7 +344,7 @@ for (i=0; i<100000; i++) {
 
 //  a = BSON.deserialize(x);
 //  a = buffalo.parse(x);
-  a = bson_decode(x);
+//  a = bson_decode(x);
   // 360k/s 3-item, 125k/s 6-item (95-135k/s, variable) (kvm, 159-170k/s hw)
   // v5: 164k/s 3.5GHz AMD
   // v5: 70k/s for Kobj (81k/s v6)
