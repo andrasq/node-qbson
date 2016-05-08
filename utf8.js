@@ -1,5 +1,5 @@
 /**
- * utf8 functions
+ * calls to read/write utf8 text into buffers
  *
  * Copyright (C) 2016 Andras Radics
  * Licensed under the Apache License, Version 2.0
@@ -11,8 +11,8 @@
 
 module.exports = {
     encodeUtf8: encodeUtf8,
-    decodeUtf8: null,
-    toJSON: null,
+    decodeUtf8: decodeUtf8,
+    byteLength: null,
     stringLength: null,
 };
 
@@ -45,7 +45,7 @@ function stringLength( buf, encoding, base, bound ) {
 }
 
 // handle the mechanics of utf8-encoding a 16-bit javascript code point
-// does not filter for invalid utf8 code points
+// The caller must filter out invalid utf8 code points.
 function encodeUtf8Char( code, target, offset ) {
     if (code & 0xF800) {
         // >11 bits, 3-byte:  1110 xxxx  10xx xxxx  10xx xxxx
@@ -65,12 +65,14 @@ function encodeUtf8Char( code, target, offset ) {
     return offset;
 }
 
-// write the utf8 string into the target buffer to offset
-// The buffer must be large enough to receive the entire converted string (not checked)
-// Notes:
-//   Utf8 stores control chars as-is, but json needs them \u escaped.
-//   code points D800..DFFF are not valid utf8 (Rfc-3629),
-//   node encodes them all as FFFF - 2, FFFD (chars EF BF BD)
+/*
+ * write the utf8 string into the target buffer to offset
+ * The buffer must be large enough to receive the entire converted string (not checked)
+ * Notes:
+ *   Utf8 stores control chars as-is, but json needs them \u escaped.
+ *   code points D800..DFFF are not valid utf8 (Rfc-3629),
+ *   node encodes them all as FFFF - 2, FFFD (chars EF BF BD)
+ */
 function encodeUtf8( string, from, to, target, offset ) {
     var code;
     for (var i=from; i<to; i++) {
@@ -87,6 +89,23 @@ function encodeUtf8( string, from, to, target, offset ) {
     return offset;
 }
 
+/*
+ * recover the utf8 string between base and bound
+ * The bytes are expected to be valid utf8, no checking is done.
+ * Handles utf16 only (16-bit code points), same as javascript.
+ * Note: faster for short strings, slower for long strings
+ * Note: generates more gc activity than buf.toString
+ */
+function decodeUtf8( buf, base, bound ) {
+    var str = "", code;
+    for (var i=base; i<bound; i++) {
+        var ch = buf[i];
+        if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
+        else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
+        else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
+    }
+    return str;
+}
 
 if (process.env['NODE_TEST'] === 'utf8') {
 ///** quicktest:
