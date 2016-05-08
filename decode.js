@@ -288,30 +288,24 @@ var o = {
     aa: [1,,"three",undefined,5.5],
 };
 
-var data = new Date();                  // 16% (10% on 8, 16% on 10, 8% on 20)
+var data = new Date();                  // 10%
 var data = {a:1, b:2, c:3, d:4, e:5};   // 99% v5, 211% v6 (1.03 sec v5, but 2.3 sec v0.10 !?)
-// cannot reproduce ?? (retimed at 15%)
-var data = 12345;                       // 6%
-var data = 1234.5;                      // 13%
-var data = /fo[o]/i;                    // 33%
+// cannot reproduce ?? (retimed at 11%)
+var data = 12345;                       // 10%
+var data = 1234.5;                      // 16%
+var data = /fo[o]/i;                    // 30%
 // (note: bson recovers binary as type Binary { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data })
 var data = new Buffer("ABCDE");         // 12%
-var data = new Buffer(66000);           // 15% (or 20x ?? ...can not reproduce??)
-var data = bson.ObjectID();             // 25% own scanString, 17% toString() for property names
-var data = [1,2,3,4,5];                 // 750% (!! wow)
-var data = "ssssssssss";                // -1% @10
-var data = "ssssssssssssssssssss";      // -1% @10 (using buf.toString)
-var data = "ssss\u1234ssss";            // -1% @10 (buf.toString), -26% own; 4% w toString() for names
-var data = "ssss";                      // 15% @10 own ; 5% w toString (25% slower on v0.10.42, and 2x slower if own scan)
-var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // FIXME: used to work, now breaks?!
-var data = new RegExp("foo", "i");
-var data = o;
-
-var data = 1234.5;                      // 13%
-var data = o;
-var data = {a:1, b:2, c:3, d:4, e:5};   // 99% v5, 211% v6 (1.03 sec v5, but 2.3 sec v0.10 !?)
-var data = [1,2,3,4,5];
-
+var data = new Buffer(66000);           // 15% (or... 20x that can not reproduce??)
+var data = bson.ObjectID();             // 30% own scanString, 17% toString() for property names
+var data = [1,2,3,4,5];                 // 680% (was 750% in early versions)
+var data = "ssssssssss";                // 5% @10
+var data = "ssssssssssssssssssss";      // 4% @10 (using buf.toString)
+var data = "ssss\u1234ssss";            // 2% @10 (buf.toString) (dev: -26% own; 4% w toString() for names)
+var data = "ssss";                      // 17% @10 own (dev: 5% w toString (25% slower on v0.10.42, and 2x slower if own scan))
+var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // -98% (ie, bson is 50x faster -- because the compat fixup is triggered)
+var data = new RegExp("foo", "i");      // 37%
+var data = o;                           // 235% (compound w/ array; 12% w/o)
 
 var o = new Object();
 for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;
@@ -362,11 +356,11 @@ console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[O
 // init version: 22% faster, 20% less gc (?), less mem used
 
 // warm up the heap (?)... throws off the 2nd timing run if not
-timeit(10000, function(){ a = bson_decode(x) });
+timeit(40000, function(){ a = bson_decode(x) });
 
-timeit(10000, function(){ a = BSON.deserialize(x) });
-timeit(10000, function(){ a = bson_decode(x) });
-timeit(10000, function(){ a = buffalo.parse(x) });
+timeit(40000, function(){ a = BSON.deserialize(x) });
+timeit(40000, function(){ a = bson_decode(x) });
+timeit(40000, function(){ a = buffalo.parse(x) });
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
