@@ -14,6 +14,13 @@ much faster, 60% to 6x faster on primitives and as much as 7x to 11x faster on
 compound data.  Timed on an 3.5GHz AMD Phenom II X4.
 
 
+Change Log
+----------
+
+- 0.0.3 - cleanups, refactored, timings
+- 0.0.2 - encoder
+- 0.0.1 - decoder
+
 Related Work
 ------------
 
