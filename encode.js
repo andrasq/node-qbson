@@ -8,6 +8,7 @@ var ObjectId = require('./object-id.js');
 
 function bson_encode( obj ) {
     // 28% faster to guess at buffer size instead of calcing exact size
+    // it is 23% slower to compose into an array and then make that into a buffer
     var buf = new Buffer(guessSize(obj));
 
     var offset = encodeEntities(obj, buf, 0);
@@ -15,7 +16,6 @@ function bson_encode( obj ) {
     // if buffer size was close enough, use it
     if (buf.length <= 2 * offset) return buf.slice(0, offset);
 
-    // 10% slower to allocate an exact size buffer, but still very fast
     var ret = new Buffer(offset);
     buf.copy(ret);
     return ret;
@@ -89,6 +89,7 @@ function guessCompoundSize( item ) {
     return 4 + contentsSize + 1;
 }
 
+// estimate the _most_ bytes the value will occupy.  Never guess too low.
 function guessSize( value ) {
     switch (determineTypeId(value)) {
     case T_INT: return 4;
@@ -193,9 +194,17 @@ function putInt64( n, target, offset ) {
     return offset + 8;
 }
 
+var _floatBuf = new Buffer(8);
 function putFloat( n, target, offset ) {
-    target.writeDoubleLE(n, offset, true);
-    return offset + 8;
+    if (target.writeDoubleLE) {
+        target.writeDoubleLE(n, offset, true);
+        return offset + 8;
+    }
+    else {
+        _floatBuf.writeDoubleLE(n, 0, true);
+        for (var i=0; i<8; i++) target[offset++] = _floatBuf[i];
+        return offset;
+    }
 }
 
 
@@ -234,6 +243,8 @@ var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible.
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
 var data = {};                          // 480% with long var name; 775% with short name
+
+var data = 1234.5;
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
