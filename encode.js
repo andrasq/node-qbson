@@ -203,22 +203,15 @@ function putFloat( n, target, offset ) {
 // quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
 
+var util = require('util');
 var timeit = require('qtimeit');
 var BSON = require('bson').BSONPure.BSON;
 var buffalo = require('buffalo');
 var bson_decode = require('./decode.js');
 
-var data = {abc: 100};
-var data = {a: 100, b: 101, c: 102, d: 103};
-//var data = {a: "ABC", b: 1, c: "DEFGHI\x88"};
-var data = {a: [1,2,3]};
-var data = {a: {b: 2, c: 3}};
-var data = {a: new Date()};
-var data = {a: 1.5, b: 2.5, c: 3.5};
-var data = {fooflebar: new Date()};
-var data = {a: new RegExp("fo\x00[o]", "i")};   // bug for bug compatible... sigh.
+// testObject with data repeated 10 times:
 // obj from K hackathon:
-var data = {
+var data = {                            // 900%
     ijk: 12,
     t: true,
     f: false,
@@ -229,22 +222,36 @@ var data = {
     a: [],
     aa: [1,,"three",undefined,5.5],
 };
-//console.log(bson_encode(data));
-console.log(BSON.deserialize(bson_encode(data)))
+var data = 1234;                        // 210%
+var data = 1234.5;                      // 220%
+var data = {a:1, b:2, c:3, d:4, e:5};   // 585%
+var data = {a: "ABC", b: 1, c: "DEFGHI\x88", d: 12345.67e-1, e: null};  // 557%
+var data = [1,2,3,4,5];                 // 650%
+var data = {a: {b: {c: {d: {e: 5}}}}};  // +59% (but buffalo is even faster!... realloc?)
+var data = new Date();                  // +75%
+var data = new RegExp("foo", "i");      // 325%
+var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible... sigh.)
+var data = [1, [2, [3, [4, [5]]]]];     // 1150% (!!) (and 600% vs buffalo)
+var data = {a: undefined};              // 335% (gets converted to null by all 3 encoders)
 
+var testObj = new Object();
+for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
+
+console.log(bson_encode({a: data}));
+console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
 
 var nloops = 40000;
 var x;
-timeit(nloops, function(){ x = BSON.serialize(data) });
-timeit(nloops, function(){ x = BSON.serialize(data) });
-timeit(nloops, function(){ x = BSON.serialize(data) });
-console.log(x);
-timeit(nloops, function(){ x = bson_encode(data) });
-timeit(nloops, function(){ x = bson_encode(data) });
-timeit(nloops, function(){ x = bson_encode(data) });
-console.log(x);
-timeit(nloops, function(){ x = buffalo.serialize(data) });
-timeit(nloops, function(){ x = buffalo.serialize(data) });
-timeit(nloops, function(){ x = buffalo.serialize(data) });
-console.log(x);
+timeit(nloops, function(){ x = BSON.serialize(testObj) });
+timeit(nloops, function(){ x = BSON.serialize(testObj) });
+timeit(nloops, function(){ x = BSON.serialize(testObj) });
+console.log(BSON.serialize({a: data}));
+timeit(nloops, function(){ x = bson_encode(testObj) });
+timeit(nloops, function(){ x = bson_encode(testObj) });
+timeit(nloops, function(){ x = bson_encode(testObj) });
+console.log(bson_encode({a: data}));
+timeit(nloops, function(){ x = buffalo.serialize(testObj) });
+timeit(nloops, function(){ x = buffalo.serialize(testObj) });
+timeit(nloops, function(){ x = buffalo.serialize(testObj) });
+console.log(buffalo.serialize({a: data}));
 }
