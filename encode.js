@@ -267,4 +267,6 @@ timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 console.log(buffalo.serialize({a: data}));
+timeit(nloops, function(){ x = JSON.stringify(testObj) });
+timeit(nloops, function(){ x = JSON.stringify(testObj) });
 }
