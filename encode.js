@@ -100,8 +100,7 @@ function guessSize( value ) {
     case T_OBJECT: return guessCompoundSize(value);
     case T_ARRAY: return guessCompoundSize(value);
     case T_DATE: return 8;
-    case T_REGEXP: return 3 * value.source.length + 1 +
-        (value.global ? 1 : 0) + (value.ignoreCase ? 1 : 0) + (value.multiline ? 1 : 0) + 1;
+    case T_REGEXP: return 3 * value.source.length + 1 + 3 + 1;
     case T_BINARY_0: return 5 + value.length;
     default: throw new Error("untyped value", value);
     }
@@ -211,7 +210,7 @@ var bson_decode = require('./decode.js');
 
 // testObject with data repeated 10 times:
 // obj from K hackathon:
-var data = {                            // 900%
+var data = {                            // 1010%, 1125% short names (156% buffalo)
     ijk: 12,
     t: true,
     f: false,
@@ -222,20 +221,23 @@ var data = {                            // 900%
     a: [],
     aa: [1,,"three",undefined,5.5],
 };
-var data = 1234;                        // 210%
-var data = 1234.5;                      // 220%
-var data = {a:1, b:2, c:3, d:4, e:5};   // 585%
+var data = 1234;                        // 225% (450% with short names!)
+var data = 1234.5;                      // 225%
+var data = {a:1, b:2, c:3, d:4, e:5};   // 780% (was 585%); 952% with 5-char field names!
 var data = {a: "ABC", b: 1, c: "DEFGHI\x88", d: 12345.67e-1, e: null};  // 557%
-var data = [1,2,3,4,5];                 // 650%
-var data = {a: {b: {c: {d: {e: 5}}}}};  // +59% (but buffalo is even faster!... realloc?)
+var data = [1,2,3,4,5];                 // 705%
+var data = {test: {test: {test: {}}}}   // 225% (244% for a:)
+var data = {a: {b: {c: {d: {e: 5}}}}};  // 191%
 var data = new Date();                  // +75%
-var data = new RegExp("foo", "i");      // 325%
+var data = new RegExp("fo[o]", "i");    // 450%, same as /fo[o]/i
 var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible... sigh.)
-var data = [1, [2, [3, [4, [5]]]]];     // 1150% (!!) (and 600% vs buffalo)
-var data = {a: undefined};              // 335% (gets converted to null by all 3 encoders)
+var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
+var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
+var data = {};                          // 480% with long var name; 775% with short name
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
+//for (var i=0; i<10; i++) testObj['var_' + i] = data;
 
 console.log(bson_encode({a: data}));
 console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
