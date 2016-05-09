@@ -100,7 +100,7 @@ function guessSize( value ) {
     case T_OBJECT: return guessCompoundSize(value);
     case T_ARRAY: return guessCompoundSize(value);
     case T_DATE: return 8;
-    case T_REGEXP: return 3 * value.source + 1 +
+    case T_REGEXP: return 3 * value.source.length + 1 +
         (value.global ? 1 : 0) + (value.ignoreCase ? 1 : 0) + (value.multiline ? 1 : 0) + 1;
     case T_BINARY_0: return 5 + value.length;
     default: throw new Error("untyped value", value);
