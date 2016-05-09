@@ -181,11 +181,11 @@ function putString( s, target, offset ) {
 }
 
 function putInt32( n, target, offset ) {
-    target[offset+0] = n & 0xFF;
-    target[offset+1] = (n >> 8) & 0xFF;
-    target[offset+2] = (n >> 16) & 0xFF;
-    target[offset+3] = (n >> 24) & 0xFF;
-    return offset + 4;
+    target[offset++] = n & 0xFF;
+    target[offset++] = (n >> 8) & 0xFF;
+    target[offset++] = (n >> 16) & 0xFF;
+    target[offset++] = (n >> 24) & 0xFF;
+    return offset;
 }
 
 function putInt64( n, target, offset ) {
@@ -232,6 +232,10 @@ var data = {                            // 1010%, 1125% short names (156% buffal
 };
 var data = 1234;                        // 225% (450% with short names!)
 var data = 1234.5;                      // 225%
+var data = "some \xfftf8 Text";
+var data = ""; for (var i=0; i<40; i++) data += "xxxxxxxxxx";
+var data = ""; for (var i=0; i<25; i++) data += "xxxxxxxxxx";
+var data = ""; for (var i=0; i<50; i++) data += "xxxx\u00ff";
 var data = {a:1, b:2, c:3, d:4, e:5};   // 780% (was 585%); 952% with 5-char field names!
 var data = {a: "ABC", b: 1, c: "DEFGHI\x88", d: 12345.67e-1, e: null};  // 557%
 var data = [1,2,3,4,5];                 // 705%
@@ -243,8 +247,6 @@ var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible.
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
 var data = {};                          // 480% with long var name; 775% with short name
-
-var data = 1234.5;
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
