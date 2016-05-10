@@ -38,6 +38,7 @@ data.  Includes JSON.stringify timings for comparison.
 Change Log
 ----------
 
+- 0.0.4 - utf8 functions complete and fully under test
 - 0.0.3 - cleanups, refactored, timings
 - 0.0.2 - encoder
 - 0.0.1 - decoder

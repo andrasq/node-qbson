@@ -12,8 +12,8 @@
 module.exports = {
     encodeUtf8: encodeUtf8,
     decodeUtf8: decodeUtf8,
-    byteLength: null,
-    stringLength: null,
+    stringLength: stringLength,
+    byteLength: byteLength,
 };
 
 
@@ -24,24 +24,29 @@ for (var i=16; i<256; i++) byteHexMap[i] = i.toString(16);
 // note: proto does not match buf.write(string, base, bound, encoding)
 // a js loop is faster for short strings, but quickly loses out to buf.toString().length
 function stringLength( buf, base, bound, encoding ) {
-    if (base === undefined) base = 0;
-    if (bound === undefined) bound = buf.length;
-
     var length = 0;
     switch (encoding) {
     case undefined:
     case 'utf8':
-        for (var i=base; i<bound;) {
-            length += 1;
-            if (buf[i] < 0x80) { i++; }
+        for (var i=base; i<bound; i++) {
             // multi-byte utf8 chars are of the form [11...][10...][10...]
-            else { while ((buf[++i] & 0xC0) === 0x80) ; }
+            if (buf[i] <= 0x7F || (buf[i] & 0xC0) !== 0x80) length += 1;
         }
         break;
     case 'hex': return (bound - base) * 2;
     default: return buf.toString(encoding, base, bound).length;
     }
     return length;
+}
+
+// count how many bytes of storage the string will require
+function byteLength( string, from, to ) {
+    var code, len = 0;
+    for (var i=from; i<to; i++) {
+        code = string.charCodeAt(i);
+        len += (code <= 0x007F) ? 1 : (code <= 0x07FF) ? 2 : 3;
+    }
+    return len;
 }
 
 // handle the mechanics of utf8-encoding a 16-bit javascript code point
@@ -93,6 +98,7 @@ function encodeUtf8( string, from, to, target, offset ) {
 /*
  * recover the utf8 string between base and bound
  * The bytes are expected to be valid utf8, no checking is done.
+ * Returns a string.
  * Handles utf16 only (16-bit code points), same as javascript.
  * Note: faster for short strings, slower for long strings
  * Note: generates more gc activity than buf.toString
