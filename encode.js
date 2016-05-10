@@ -176,7 +176,7 @@ function putStringZ( s, target, offset ) {
 }
 
 function putString( s, target, offset ) {
-    if (s.length < 100) return utf8.encodeUtf8(s, 0, s.length, target, offset);
+    if (s.length < 80) return utf8.encodeUtf8(s, 0, s.length, target, offset);
     else return offset + target.write(s, offset, 'utf8');
 }
 
@@ -241,7 +241,7 @@ var data = {a: "ABC", b: 1, c: "DEFGHI\x88", d: 12345.67e-1, e: null};  // 557%
 var data = [1,2,3,4,5];                 // 705%
 var data = {test: {test: {test: {}}}}   // 225% (244% for a:)
 var data = {a: {b: {c: {d: {e: 5}}}}};  // 191%
-var data = new Date();                  // +75%
+var data = new Date();                  // 220%
 var data = new RegExp("fo[o]", "i");    // 450%, same as /fo[o]/i
 var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible... sigh.)
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
