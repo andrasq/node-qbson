@@ -35,6 +35,34 @@ data.  Includes JSON.stringify timings for comparison.
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 | 172 |  191 | 1130 |
 
 
+utf8
+----
+
+### encodeUtf8( string, from, to, buffer, offset )
+
+encode the substring between `from` and `to` as utf8 bytes into the buffer starting
+at offset, and return the number of bytes written.  Does not check for overflow.
+The converted bytes are identical to `buffer.write`.  Does not use `string.slice`
+or `buffer.write`.
+
+### decodeUtf8( buffer, offset, limit )
+
+return the utf8 encoded string in the buffer between offset and limit.  Traverses
+the buffer, does not use `buffer.toString`.  Note: for non-trivial strings
+buffer.toString() is faster.
+
+### stringLength( buffer, offset, limit, [encoding] )
+
+return the length of the utf8 encoded string found in the buffer between offset and
+limit.  The string is presumed valid utf8 and is not tested for validity.  Examines
+the buffer, does not use `buffer.toString`.
+
+### byteLength( string, from, to )
+
+return the number of bytes needed to store the specified portion of the string.
+Examines the buffer, does not use `Buffer.byteLength`.
+
+
 Change Log
 ----------
 
