@@ -40,7 +40,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             var len = getUInt32(buf, base);
             base += 4;
             var end = base + len - 1;
-            target[name] = (len < 10) ? getString(buf, base, end) : buf.toString('utf8', base, end);
+            target[name] = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
             base = end + 1;
             if (buf[base-1] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
             break;
@@ -311,8 +311,17 @@ var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // -98% (ie, bson is 50x
 var data = new RegExp("foo", "i");      // 37%
 var data = o;                           // 235% (compound w/ array; 12% w/o)
 
+var data = {a:1, b:2, c:3, d:4, e:5};
+var data = {a: {b: {c: {d: {e: 5}}}}};  // extreme; 2-char var names half the speed!!
+var data = {a2: {b2: {c2: {d2: {e2: 5}}}}};  // extreme; 2-char var names 1/4 the speed?!
+
+
 var o = new Object();
-for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;
+//for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
+//for (var i=0; i<10; i++) o['variablePropertyName_' + i] = data;                         // 26 ch var names
+//for (var i=0; i<10; i++) o['varNameMiddle_' + i] = data;                                // 15 ch var names
+//for (var i=0; i<10; i++) o['varNameS_' + i] = data;                                     // 10 ch var names
+for (var i=0; i<10; i++) o['var_' + i] = data;                                          // 5 ch var names
 
 var fptime = function fptime() { var t = process.hrtime(); return t[0] + t[1] * 1e-9; }
 var x = BSON.serialize(o, false, true);
@@ -361,6 +370,7 @@ console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[O
 
 // warm up the heap (?)... throws off the 2nd timing run if not
 timeit(40000, function(){ a = bson_decode(x) });
+console.log(a && a[Object.keys(a)[0]]);
 
 timeit(40000, function(){ a = BSON.deserialize(x) });
 timeit(40000, function(){ a = bson_decode(x) });

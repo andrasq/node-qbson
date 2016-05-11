@@ -104,9 +104,9 @@ function encodeUtf8( string, from, to, target, offset ) {
  * Note: generates more gc activity than buf.toString
  */
 function decodeUtf8( buf, base, bound ) {
-    var str = "", code;
+    var ch, str = "", code;
     for (var i=base; i<bound; i++) {
-        var ch = buf[i];
+        ch = buf[i];
         if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
         else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
         else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
