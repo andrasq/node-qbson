@@ -4,6 +4,8 @@
  * for timings, to see how much room there is for bson speedup
  * (not that much... maybe 20-30%, but {...} and esp [...] are much faster)
  *
+ * This file is derived from andrasq/node-json-simple/lib/parse-bson.js
+ *
  * Copyright (C) 2015-2016 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
@@ -25,7 +27,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
     while (base < bound) {
         start = base;
         type = buf[base++];
-        (asArray) ? scanInt(buf, base, s0) : scanString(buf, base, s0);
+        (asArray) ? scanIntZ(buf, base, s0) : scanStringZ(buf, base, s0);
         name = s0.val;
         base = s0.end + 1;  // skip string + NUL
 
@@ -186,7 +188,7 @@ function pow2( exp ) {
 }
 
 // extract a decimal number string
-function scanInt( buf, base, item ) {
+function scanIntZ( buf, base, item ) {
     var n = 0;
     for (var i=base; buf[i]; i++) {
         n = n * 10 + buf[i] - 0x30;
@@ -196,8 +198,10 @@ function scanInt( buf, base, item ) {
 }
 
 // get the NUL-terminated string
-function scanString( buf, base, item ) {
+function scanStringZ( buf, base, item ) {
     for (var i=base; buf[i]; i++) ;
+    // breakeven is around 13 chars (node 5; more with node 6)
+    if (i < base + 12) return scanStringUtf8(buf, base, item);
     item.end = i;
     return item.val = buf.toString('utf8', base, i);
 }
@@ -208,9 +212,9 @@ function scanStringUtf8( buf, base, item ) {
     var ch, str = "", code;
     for (var i=base; buf[i]; i++) {
         ch = buf[i];
-        if (ch < 0x80) str += String.fromCharCode(ch);
-        else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));
-        else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));
+        if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
+        else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
+        else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
         // TODO: should validity test succeeding chars
     }
     item.val = str;
