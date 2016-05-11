@@ -1,3 +1,13 @@
+/**
+ * bson encoder
+ *
+ * bson encoder for nodejs
+ * Very fast, but partial only (work in progress).
+ *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ */
+
 'use strict';
 
 var utf8 = require('./utf8.js');
