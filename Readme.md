@@ -33,6 +33,7 @@ data.  Includes JSON.stringify timings for comparison.
 | `{a:1,b:2,c:3,d:4,e:5}` | 100 | 250 |  780 |  810 |
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 176 | 1200 |  958 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 | 172 |  191 | 1130 |
+| ObjectId()              | 100 | 177 |  211 |    x |
 
 
 decode
@@ -54,7 +55,7 @@ Yes, JSON can be up to 140x faster than BSON.
 | `{a:1,b:2,c:3,d:4,e:5}` | 100 |  87 |  180 |  1720 |
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 118 | 1160 | 12700 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 |  62 |  182 |  1160 |
-
+| ObjectId()              | 100 | 110 |  768 |     x |
 
 utf8
 ----
@@ -81,7 +82,7 @@ the buffer, does not use `buffer.toString`.
 ### byteLength( string, from, to )
 
 return the number of bytes needed to store the specified portion of the string.
-Examines the buffer, does not use `Buffer.byteLength`.
+Examines the string, does not use `Buffer.byteLength`.
 
 
 Change Log
