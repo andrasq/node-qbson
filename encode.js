@@ -240,6 +240,7 @@ var bson = require('bson');
 var BSON = require('bson').BSONPure.BSON;
 var buffalo = require('buffalo');
 var bson_decode = require('./decode.js');
+var qbson = require('./qbson');
 
 // testObject with data repeated 10 times:
 // obj from K hackathon:
@@ -272,7 +273,7 @@ var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
 var data = {};                          // 480% with long var name; 775% with short name
 //var data = bson.ObjectId("123456781234567812345678");         // 100% base
-//var data = new ObjectId("123456781234567812345678");          // 215% vs bson.ObjectId()
+//var data = new qbson.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
 //var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
 
 var testObj = new Object();
