@@ -11,7 +11,7 @@ the encoder is new.
 The hand-rolled decoder is slightly faster than the native C++ module to convert
 most atomic types, but is 6x (!) faster decoding arrays.  The encoder is overall
 much faster, 2x to 6x faster on primitives and as much as 12x faster on compound
-data.  Timed on an 3.5GHz AMD Phenom II X4.
+data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.
 
 
 encode
@@ -33,7 +33,7 @@ data.  Includes JSON.stringify timings for comparison.
 | `{a:1,b:2,c:3,d:4,e:5}` | 100 | 250 |  780 |  810 |
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 176 | 1200 |  958 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 | 172 |  191 | 1130 |
-| ObjectId()              | 100 | 177 |  211 |    x |
+| ObjectId()              | 100 |  74 |  215 |    x |
 
 
 decode
@@ -55,7 +55,7 @@ Yes, JSON can be up to 140x faster than BSON.
 | `{a:1,b:2,c:3,d:4,e:5}` | 100 |  87 |  180 |  1720 |
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 118 | 1160 | 12700 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 |  62 |  182 |  1160 |
-| ObjectId()              | 100 | 110 |  768 |     x |
+| ObjectId()              | 100 |  65 |  125 |     x |
 
 utf8
 ----

@@ -11,11 +11,14 @@
 
 var encode = require('./encode.js');
 var decode = require('./decode.js');
+var ObjectId = require('./object-id.js');
 
 module.exports = {
     encode: encode,
     decode: decode,
-    toJSON: null,
+    toJson: null,
+    ObjectId: ObjectId,
+    ObjectID: ObjectId,
 };
 
 var utf8 = require('./utf8.js');
