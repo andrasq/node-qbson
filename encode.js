@@ -31,24 +31,24 @@ function bson_encode( obj ) {
     return ret;
 }
 
-var T_FLOAT = 1;
-var T_STRING = 2;
-var T_OBJECT = 3;
-var T_ARRAY = 4;
-var T_BINARY_0 = 5;
+var T_FLOAT = 1;        // 64-bit IEEE 754 float
+var T_STRING = 2;       // 4B length (including NUL byte but not the length bytes) + string + NUL
+var T_OBJECT = 3;       // length (including length bytes and terminating NUL byte) + items as asciiZ name & value + NUL
+var T_ARRAY = 4;        // length (including length and NUL) + items as asciiZ offset number & value + NUL
+var T_BINARY_0 = 5;     // length (not including length bytes or subtype) + subtype + length bytes
 var T_UNDEFINED = 6;    // deprecated
 var T_OBJECTID = 7;
-var T_BOOLEAN = 8;
-var T_DATE = 9;
-var T_NULL = 10;
-var T_REGEXP = 11;
+var T_BOOLEAN = 8;      // 1B true 01 / false 00
+var T_DATE = 9;         // Date.now() timestamp stored as 64-bit LE integer
+var T_NULL = 10;        // 0B
+var T_REGEXP = 11;      // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
 var T_DBREF = 12;       // deprecated
 var T_CODE = 13;                // TBD
 var T_SYMBOL = 14;              // TBD
 var T_CODE_WITH_SCOPE = 15;     // TBD
-var T_INT = 16;
-var T_TIMESTAMP = 17;   // ignore
-var T_LONG = 18;                // TBD
+var T_INT = 16;         // 32-bit LE signed twos complement
+var T_TIMESTAMP = 17;   // ignore ?
+var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
 var T_MINKEY = 19;      // ignore
 var T_MAXKEY = 20;      // ignore
 
@@ -70,7 +70,8 @@ function determineTypeId( value ) {
 // note that eg Number(3) is type 'number', but new Number(3) is 'object'
 // (same holds for string, bool)
 function determineClassTypeId( value ) {
-    return (value instanceof Date) ? T_DATE
+    return (value instanceof ObjectId) ? T_OBJECTID
+        : (value instanceof Date) ? T_DATE
         : (value instanceof RegExp) ? T_REGEXP
         : (value instanceof ObjectId) ? T_OBJECTID
         : (Buffer.isBuffer(value)) ? T_BINARY_0
@@ -105,6 +106,7 @@ function guessSize( value ) {
     case T_INT: return 4;
     case T_FLOAT: return 8;
     case T_STRING: return 4 + 3 * value.length + 1;
+    case T_OBJECTID: return 12;
     case T_BOOLEAN: return 1;
     case T_UNDEFINED: return 0;
     case T_NULL: return 0;
@@ -113,7 +115,7 @@ function guessSize( value ) {
     case T_DATE: return 8;
     case T_REGEXP: return 3 * value.source.length + 1 + 3 + 1;
     case T_BINARY_0: return 5 + value.length;
-    default: throw new Error("untyped value", value);
+    default: throw new Error("untyped value " + (typeof value));
     }
 }
 
@@ -156,6 +158,9 @@ function encodeEntity( name, value, target, offset ) {
         // length includes terminating 0 but not the length bytes
         putInt32(offset-start-4, target, start);
         break;
+    case T_OBJECTID:
+        offset = value.copyToBuffer(target, offset);
+        break;
     case T_BOOLEAN:
         target[offset++] = value ? 1 : 0;
         break;
@@ -174,6 +179,14 @@ function encodeEntity( name, value, target, offset ) {
         var flags = (value.global ? 'g' : '') + (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '');
         offset = putStringZ(flags, target, offset);
         break;
+    case T_BINARY_0:
+        offset = putInt32(value.length + 1, target, offset);
+        target[offset++] = 0;
+        value.copy(target, offset);
+        offset += value.length;
+        break;
+    default:
+        throw new Error("unsupported entity type " + typeId);
     }
     return offset;
 }
@@ -223,6 +236,7 @@ if (process.env['NODE_TEST'] === 'encode') {
 
 var util = require('util');
 var timeit = require('qtimeit');
+var bson = require('bson');
 var BSON = require('bson').BSONPure.BSON;
 var buffalo = require('buffalo');
 var bson_decode = require('./decode.js');
@@ -257,16 +271,22 @@ var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible.
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
 var data = {};                          // 480% with long var name; 775% with short name
+//var data = bson.ObjectId("123456781234567812345678");         // 100% base
+//var data = new ObjectId("123456781234567812345678");          // 215% vs bson.ObjectId()
+//var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
 //for (var i=0; i<10; i++) testObj['var_' + i] = data;
 
-console.log(bson_encode({a: data}));
-console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
+//console.log(bson_encode({a: data}));
+//console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
 
 var nloops = 40000;
 var x;
+timeit(nloops, function(){ x = JSON.stringify(testObj) });
+timeit(nloops, function(){ x = JSON.stringify(testObj) });
+
 timeit(nloops, function(){ x = BSON.serialize(testObj) });
 timeit(nloops, function(){ x = BSON.serialize(testObj) });
 timeit(nloops, function(){ x = BSON.serialize(testObj) });
@@ -279,6 +299,4 @@ timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 console.log(buffalo.serialize({a: data}));
-timeit(nloops, function(){ x = JSON.stringify(testObj) });
-timeit(nloops, function(){ x = JSON.stringify(testObj) });
 }
