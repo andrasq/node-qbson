@@ -303,6 +303,9 @@ var data = new Buffer("ABCDE");         // 12%
 var data = new Buffer(66000);           // 15% (or... 20x that can not reproduce??)
 var data = bson.ObjectID();             // 30% own scanString, 17% toString() for property names
 var data = [1,2,3,4,5];                 // 680% (was 750% in early versions)
+var data = {a: {b: {c: {d: {e: 5}}}}};  // extreme; 2-char var names half the speed!!
+var data = {a2: {b2: {c2: {d2: {e2: 5}}}}};  // extreme; 2-char var names 1/4 the speed?!
+var data = [1];
 var data = [1,[2,[3,[4,[5]]]]];
 var data = "ssssssssss";                // 5% @10
 var data = "ssssssssssssssssssss";      // 4% @10 (using buf.toString)
@@ -312,13 +315,12 @@ var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // -98% (ie, bson is 50x
 var data = new RegExp("foo", "i");      // 37%
 var data = ""; while (data.length < 250) data += "foo_\x81";    // 250 ch text with 20% 2-byte utf8
 var data = o;                           // 235% (compound w/ array; 12% w/o)
+var data = bson.ObjectId("123456781234567812345678");
 
 //var data = require("/home/andras/work/src/kds.git/package.json");
 //var data = require("/home/andras/work/src/kds.git/config.json");
 //var data = o;                           // 350% +/- (compound w/ array; 15% w/o)
 //var data = require('./dataBatch.js');
-var data = {a2: {b2: {c2: {d2: {e2: 5}}}}};  // extreme; 2-char var names 1/4 the speed?!
-
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -376,16 +378,20 @@ console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[O
 // warm up the heap (?)... throws off the 2nd timing run if not
 var nloops = 40000;
 timeit(nloops, function(){ a = bson_decode(x) });
+timeit(nloops, function(){ a = bson_decode(x) });
+timeit(nloops, function(){ a = bson_decode(x) });
 console.log(a && a[Object.keys(a)[0]]);
 
 var json = JSON.stringify(data);
 timeit(nloops, function(){ a = JSON.parse(json) });
 
 timeit(nloops, function(){ a = BSON.deserialize(x) });
+console.log(a && a[Object.keys(a)[0]]);
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = buffalo.parse(x) });
+console.log(a && a[Object.keys(a)[0]]);
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
