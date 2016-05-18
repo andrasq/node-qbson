@@ -2,8 +2,8 @@
 
 var assert = require('assert');
 
-var sysbuf = new Buffer([0,0,0,0,0,0,0,0,0,0,0,0]);
-var testbuf = new Buffer([0,0,0,0,0,0,0,0,0,0,0,0]);
+var sysbuf = new Buffer([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+var testbuf = new Buffer([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
 
 var utf8 = require('./utf8.js');
 
@@ -48,5 +48,13 @@ for (var i=0; i<0x10000; i++) {
         assert.equal(utf8.byteLength(strings[j], 0, strings[j].length), Buffer.byteLength(strings[j]));
         assert.equal(utf8.byteLength(strings[j], 1, strings[j].length), Buffer.byteLength(strings[j].slice(1)));
         assert.equal(utf8.byteLength(strings[j], 0, strings[j].length-1), Buffer.byteLength(strings[j].slice(0, -1)));
+    }
+
+    // encodeJson should write same strings as JSON
+    for (var j=0; j<strings.length; j++) {
+        var nb = utf8.encodeJson(strings[j], 0, strings[j].length, testbuf, 0);
+        testbuf.copy(sysbuf);
+console.log(nb, testbuf);
+        assert.equal(testbuf.toString('utf8', 0, nb), JSON.stringify(strings[j]).slice(1, -1))
     }
 }

@@ -11,9 +11,11 @@
 
 module.exports = {
     encodeUtf8: encodeUtf8,
+    encodeJson: encodeJson,
     decodeUtf8: decodeUtf8,
     stringLength: stringLength,
     byteLength: byteLength,
+    utf8FragmentBytes: utf8FragmentBytes,
 };
 
 
@@ -21,7 +23,6 @@ var byteHexMap = new Array();
 for (var i=0; i<16; i++) byteHexMap[i] = '0' + i.toString(16);
 for (var i=16; i<256; i++) byteHexMap[i] = i.toString(16);
 
-// note: proto does not match buf.write(string, base, bound, encoding)
 // a js loop is faster for short strings, but quickly loses out to buf.toString().length
 function stringLength( buf, base, bound, encoding ) {
     var length = 0;
@@ -47,6 +48,20 @@ function byteLength( string, from, to ) {
         len += (code <= 0x007F) ? 1 : (code <= 0x07FF) ? 2 : 3;
     }
     return len;
+}
+
+// return the count of bytes at the end of the range that are part of a split multi-byte utf8 char
+// Out of range bounds are not checked.  Invalid utf8 sequences are not checked.
+function utf8FragmentBytes( buf, base, bound ) {
+    // use switch as a jump table, fall through each case
+    // each test checks whether that char starts a split multi-byte char
+    switch (bound - base) {
+    default:
+    case 3: if ((buf[bound-3] & 0xF0) === 0xF0) return 3;       // 11110xxx 4+ byte char (not utf16)
+    case 2: if ((buf[bound-2] & 0xE0) === 0xE0) return 2;       // 1110xxxx 3+ byte char
+    case 1: if ((buf[bound-1] & 0xC0) === 0xC0) return 1;       // 110xxxxx 2+ byte char
+    case 0: return 0;
+    }
 }
 
 // handle the mechanics of utf8-encoding a 16-bit javascript code point
@@ -116,11 +131,27 @@ function decodeUtf8( buf, base, bound ) {
 
 /*
  * encode the string into valid json.  Json is like utf8, but
- * it \u escapes control characters.
+ * it \u escapes control characters or \-escapes terminal formatting chars \b \n \r etc.
+ * Node recognizes BS TAB NL VT FF CR in strings (not \a BEL), but JSON does not \-escape \v VT.
  */
 var hexCharCodes = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' ];
 for (var i=0; i<hexCharCodes.length; i++) hexCharCodes[i] = hexCharCodes[i].charCodeAt(0);
-function encodeJsonControl( code, target, offset ) {
+// char codes for the control chars 0-0x1F.
+var backslashCharCodes = [
+   0,   0,   0,   0,   0,   0,   0,   0,
+  'b', 't', 'n',  0, 'f', 'r',  0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,
+];
+for (var i=0; i<backslashCharCodes.length; i++) {
+    if (backslashCharCodes[i]) backslashCharCodes[i] = backslashCharCodes[i].charCodeAt(0);
+}
+function encodeJsonControlChar( code, target, offset ) {
+    if (backslashCharCodes[code]) {
+        target[offset++] = 0x5c;
+        target[offset++] = backslashCharCodes[code];
+        return offset;
+    }
     target[offset++] = 0x5c;  // \
     target[offset++] = 0x75;  // u
     target[offset++] = 0x30;  // 0
@@ -129,16 +160,23 @@ function encodeJsonControl( code, target, offset ) {
     target[offset++] = hexCharCodes[code & 0x0F];
     return offset;
 }
+
+/*
+ * JSON is utf8 with the 32 control chars 0x00 - 0x1F \u escaped, eg '\u001F'.
+ * Multi-byte utf8 chars are valid in json strings.
+ */
 function encodeJson( string, from, to, target, offset ) {
     var code;
     for (var i=from; i<to; i++) {
         code = string.charCodeAt(i);
-        if (code < 0x20) offset = encodeJsonControl(code);
-        else if (code < 0x80) target[offset++] = code;
-        else if (code >= 0xD800 && code <= 0xDFFF) {
+        if (code <= 0x1F) offset = encodeJsonControlChar(code, target, offset); // control
+        else if (code === 0x22) { target[offset++] = 0x5c; target[offset++] = 0x22; }  // "
+        else if (code === 0x5c) { target[offset++] = 0x5c; target[offset++] = 0x5c; }  // "
+        else if (code <= 0x7F) target[offset++] = code;  // ascii
+        else if (code >= 0xD800 && code <= 0xDFFF) {  // invalid
             target[offset++] = 0xEF; target[offset++] = 0xBF; target[offset++] = 0xBD;
         }
-        else offset = encodeUtf8Char(code, target, offset);
+        else offset = encodeUtf8Char(code, target, offset); // multi-byte
     }
     return offset;
 }
