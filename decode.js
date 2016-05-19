@@ -321,6 +321,9 @@ var data = bson.ObjectId("123456781234567812345678");
 //var data = require("/home/andras/work/src/kds.git/config.json");
 //var data = o;                           // 350% +/- (compound w/ array; 15% w/o)
 //var data = require('./dataBatch.js');
+var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
+var data = Object(); for (var i=0; i<100; i++) data[i] = i;
+var data = require('./prod-data.js');
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -376,22 +379,22 @@ console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[O
 // init version: 22% faster, 20% less gc (?), less mem used
 
 // warm up the heap (?)... throws off the 2nd timing run if not
-var nloops = 40000;
+var nloops = 400;
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
-console.log(a && a[Object.keys(a)[0]]);
+//console.log(a && a[Object.keys(a)[0]]);
 
 var json = JSON.stringify(data);
 timeit(nloops, function(){ a = JSON.parse(json) });
 
 timeit(nloops, function(){ a = BSON.deserialize(x) });
-console.log(a && a[Object.keys(a)[0]]);
+//console.log(a && a[Object.keys(a)[0]]);
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = buffalo.parse(x) });
-console.log(a && a[Object.keys(a)[0]]);
+//console.log(a && a[Object.keys(a)[0]]);
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
