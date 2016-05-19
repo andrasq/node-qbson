@@ -324,6 +324,7 @@ var data = bson.ObjectId("123456781234567812345678");
 var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
 var data = require('./prod-data.js');
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -379,7 +380,7 @@ console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[O
 // init version: 22% faster, 20% less gc (?), less mem used
 
 // warm up the heap (?)... throws off the 2nd timing run if not
-var nloops = 400;
+var nloops = 40000;
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = bson_decode(x) });

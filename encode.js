@@ -43,9 +43,9 @@ var T_DATE = 9;         // Date.now() timestamp stored as 64-bit LE integer
 var T_NULL = 10;        // 0B
 var T_REGEXP = 11;      // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
 var T_DBREF = 12;       // deprecated
-var T_CODE = 13;                // TBD
+var T_FUNCTION = 13;    // function source
 var T_SYMBOL = 14;              // TBD
-var T_CODE_WITH_SCOPE = 15;     // TBD
+var T_SCOPED_FUNCTION = 15;     // TBD
 var T_INT = 16;         // 32-bit LE signed twos complement
 var T_TIMESTAMP = 17;   // ignore ?
 var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
@@ -59,6 +59,7 @@ function determineTypeId( value ) {
     case 'string': return T_STRING;
     case 'boolean': return T_BOOLEAN;
     case 'undefined': return T_NULL;
+    case 'function': return T_FUNCTION;
     case 'object': return (value === null) ? T_NULL
         : (Array.isArray(value)) ? T_ARRAY
         : value.constructor ? determineClassTypeId(value)
@@ -101,8 +102,10 @@ function guessCompoundSize( item ) {
 }
 
 // estimate the _most_ bytes the value will occupy.  Never guess too low.
+// The first switch maps the common sizes, a second switch the more obscure ones.
 function guessSize( value ) {
-    switch (determineTypeId(value)) {
+    var id;
+    switch (id = determineTypeId(value)) {
     case T_INT: return 4;
     case T_FLOAT: return 8;
     case T_STRING: return 4 + 3 * value.length + 1;
@@ -110,12 +113,27 @@ function guessSize( value ) {
     case T_BOOLEAN: return 1;
     case T_UNDEFINED: return 0;
     case T_NULL: return 0;
+    case T_DATE: return 8;
     case T_OBJECT: return guessCompoundSize(value);
     case T_ARRAY: return guessCompoundSize(value);
-    case T_DATE: return 8;
     case T_REGEXP: return 3 * value.source.length + 1 + 3 + 1;
+    default: return guessVariableSize(id, value);
+    }
+}
+// Its 40% faster to use a second switch than to exceed 600 chars (not inline),
+// with only 3% penalty if having to use the second switch as well.
+function guessVariableSize( id, value ) {
+    switch (id) {
+    case T_SYMBOL: return 4 + 3 * value.length + 1;
+    case T_FUNCTION: return 4 + 3 * value.toString().length + 1;
     case T_BINARY_0: return 5 + value.length;
-    default: throw new Error("untyped value " + (typeof value));
+    case T_TIMESTAMP: return 8;
+    case T_LONG: return 8;
+    case T_DBREF:
+    case T_SCOPED_FUNCTION:
+    case T_MINKEY:
+    case T_MAXKEY:
+    default: throw new Error("unknown size of " + (typeof value));
     }
 }
 
@@ -152,6 +170,10 @@ function encodeEntity( name, value, target, offset ) {
     case T_FLOAT:
         offset = putFloat(value, target, offset);
         break;
+    case T_FUNCTION:
+        value = value.toString();
+        // and fall through to be handled as a string
+    case T_SYMBOL:
     case T_STRING:
         start = offset;
         offset = putStringZ(value, target, offset+4);
@@ -271,20 +293,27 @@ var data = new RegExp("fo[o]", "i");    // 450%, same as /fo[o]/i
 var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible... sigh.)
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
-var data = {};                          // 480% with long var name; 775% with short name
+var data = {};                          // 400% with long var names; 710% with short names
+//var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;        // 845%
 //var data = bson.ObjectId("123456781234567812345678");         // 100% base
 //var data = new qbson.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
 //var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
+//var data = require('./prod-data.js');   // 500% ?! (with inlined guessSize, only 2x w/o)
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
 //for (var i=0; i<10; i++) testObj['var_' + i] = data;
 
-//console.log(bson_encode({a: data}));
-//console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
+console.log(bson_encode({a: data}));
+console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
 
 var nloops = 40000;
 var x;
+timeit(nloops, function(){ x = bson_encode(testObj) });
+timeit(nloops, function(){ x = bson_encode(testObj) });
+timeit(nloops, function(){ x = bson_encode(testObj) });
+
 timeit(nloops, function(){ x = JSON.stringify(testObj) });
 timeit(nloops, function(){ x = JSON.stringify(testObj) });
 

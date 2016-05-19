@@ -34,6 +34,7 @@ data.  Includes JSON.stringify timings for comparison.
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 176 | 1200 |  958 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 | 172 |  191 | 1130 |
 | `ObjectId()`            | 100 |  74 |  215 |    x |
+| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 | 190 | 650 | 690 |
 
 
 decode
@@ -56,6 +57,7 @@ Yes, JSON can be up to 140x faster than BSON.
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 118 | 1160 | 12700 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 |  62 |  182 |  1160 |
 | `ObjectId()`            | 100 |  65 |  125 |     x |
+| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 |  91 | 184 | 1760 |
 
 utf8
 ----
