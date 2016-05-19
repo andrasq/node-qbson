@@ -90,6 +90,7 @@ Examines the string, does not use `Buffer.byteLength`.
 Change Log
 ----------
 
+- 0.0.5 - more timings, encode functions and symbols, json-decoder, encodeJson, ObjectId
 - 0.0.4 - utf8 functions complete and fully under test
 - 0.0.3 - cleanups, refactored, timings
 - 0.0.2 - encoder
