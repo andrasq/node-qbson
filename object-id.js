@@ -12,6 +12,7 @@ module.exports = ObjectId;
 
 
 function ObjectId( value, offset ) {
+    if (!this || this === global) return new ObjectId(value, offset);
     this.bytes = null;
     if (value) {
         if (!offset) offset = 0;
