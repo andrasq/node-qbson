@@ -1,8 +1,5 @@
 /**
- * fledgeling bson decoder
- *
- * for timings, to see how much room there is for bson speedup
- * (not that much... maybe 20-30%, but {...} and esp [...] are much faster)
+ * bson decoder
  *
  * This file is derived from andrasq/node-json-simple/lib/parse-bson.js
  *
@@ -19,6 +16,27 @@ var ObjectId = require('./object-id.js');
 function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
 }
+
+var T_FLOAT = 1;        // 64-bit IEEE 754 float
+var T_STRING = 2;       // 4B length (including NUL byte but not the length bytes) + string + NUL
+var T_OBJECT = 3;       // length (including length bytes and terminating NUL byte) + items as asciiZ name & value + NUL
+var T_ARRAY = 4;        // length (including length and NUL) + items as asciiZ offset number & value + NUL
+var T_BINARY_0 = 5;     // length (not including length bytes or subtype) + subtype + length bytes
+var T_UNDEFINED = 6;    // deprecated
+var T_OBJECTID = 7;
+var T_BOOLEAN = 8;      // 1B true 01 / false 00
+var T_DATE = 9;         // Date.now() timestamp stored as 64-bit LE integer
+var T_NULL = 10;        // 0B
+var T_REGEXP = 11;      // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
+var T_DBREF = 12;       // deprecated
+var T_FUNCTION = 13;    // function source
+var T_SYMBOL = 14;              // TBD
+var T_SCOPED_FUNCTION = 15;     // TBD
+var T_INT = 16;         // 32-bit LE signed twos complement
+var T_TIMESTAMP = 17;   // ignore ?
+var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
+var T_MINKEY = 19;      // ignore
+var T_MAXKEY = 20;      // ignore
 
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var s0 = { val: 0, end: 0 };
@@ -126,10 +144,7 @@ function getString( buf, base, bound ) {
 }
 
 function getUInt32( buf, pos ) {
-    return buf[pos] +
-        (buf[pos+1] << 8) +
-        (buf[pos+2] << 16) +
-        ((buf[pos+3] << 24) >>> 0);     // coerce to unsigned
+    return getInt32(buf, pos) >>> 0;    // coerced to unsigned
 }
 
 function getInt32( buf, pos ) {
@@ -148,43 +163,46 @@ function getInt64( buf, pos ) {
     return (v1 * 0x100000000) + getUInt32(buf, pos);
 }
 
-// extract the 64-bit little-endian ieee 754 floating-point value 
+/*
+ * extract the 64-bit little-endian ieee 754 floating-point value 
+ *   see http://en.wikipedia.org/wiki/Double-precision_floating-point_format
+ *   1 bit sign + 11 bits exponent + (1 hidden 1 bit) + 52 bits mantissa (stored)
+ */
+// recover the mantissa into a 20.32 bit fixed-point float,
+// then convert by shifting into the normalized 1.53 format
+// The mantissa low 32 bits become the 20.32 fixed-point fraction,
+// then the whole thing is scaled to the normalized 1.53 position.
+var _rshift32 = (1 / 0x100000000);      // >> 32 for floats
+var _rshift20 = (1 / 0x100000);         // >> 20 for floats
 function getFloat( buf, pos ) {
-    // see http://en.wikipedia.org/wiki/Double-precision_floating-point_format
-    // 1 bit sign + 11 bits exponent + (1 hidden 1 bit) + 52 bits mantissa (stored)
-
     var lowWord = getUInt32(buf, pos);
     var highWord = getUInt32(buf, pos+4);
-    var scaledMantissa = (highWord & 0xFFFFF) + lowWord * (1/0x100000000);
+    var mantissa = (highWord & 0x000FFFFF) + lowWord * _rshift32;
     var exponent = (highWord & 0x7FF00000) >> 20;
-    var sign = (highWord & 0x80000000) ? -1 : 1;
 
     var value;
-    if (exponent === 0x7ff) {
-        // zero mantissa is signed Infinity, nonzero mantissa is NaN
-        if (scaledMantissa) value = NaN;
-        else value = Infinity;
+    if (exponent === 0x000) {
+        // zero if !mantissa, else subnormal (non-normalized small value)
+        value = !mantissa ? 0.0 : mantissa * _rshift20;
     }
-    else if (exponent === 0x000) {
-        // zero and subnormals (small values)
-        if (!scaledMantissa) value = 0;
-        else value = scaledMantissa * (1/0x100000)
+    else if (exponent < 0x7ff) {
+        // normalized value with an implied 53rd 1 bit and 1023-biased exponent
+        exponent -= 1023;
+        value = (1 + mantissa * _rshift20) * pow2(exponent);
     }
     else {
-        // normalized values with an implied 53rd 1 bit and 1023-biased exponent
-        exponent -= 1023;
-        value = 1 + scaledMantissa * (1/0x100000);
-        value = value * pow2(exponent);
+        // 0x7ff with zero mantissa is signed Infinity, nonzero mantissa is NaN
+        value = mantissa ? NaN : Infinity;
     }
-    return (sign >= 0) ? value : -value;
+
+    return (highWord >> 31) ? -value : value;   // sign bit
 }
-
 // given an exponent n, return 2**n
+// n is always an integer, faster to shift when possible
 function pow2( exp ) {
-    // n is always an integer, a shift is faster (when possible)
-    return (exp >= 0 && exp < 31) ? 1 << exp : (exp < 0 && exp > -31) ? 1 / (1 << -exp) : Math.pow(2, exp);
-
-    return Math.pow(2, exp);
+    return (exp >= 0 && exp < 31) ? 1 << exp
+        : (exp < 0 && exp > -31) ? 1 / (1 << -exp)
+        : Math.pow(2, exp);
 }
 
 // extract a decimal number string
@@ -325,6 +343,8 @@ var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
 var data = require('./prod-data.js');
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};
+var data = 1234.5;
+
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -388,12 +408,14 @@ timeit(nloops, function(){ a = bson_decode(x) });
 
 var json = JSON.stringify(data);
 timeit(nloops, function(){ a = JSON.parse(json) });
+console.log(json);
 
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 //console.log(a && a[Object.keys(a)[0]]);
 timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 timeit(nloops, function(){ a = bson_decode(x) });
+timeit(nloops, function(){ a = buffalo.parse(x) });
 timeit(nloops, function(){ a = buffalo.parse(x) });
 //console.log(a && a[Object.keys(a)[0]]);
 

@@ -11,8 +11,8 @@ the encoder is new.
 The hand-rolled decoder is slightly faster than the native C++ module to convert
 most atomic types, but is 6x (!) faster decoding arrays.  The encoder is overall
 much faster, 2x to 6x faster on primitives and as much as 12x faster on compound
-data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.
-
+data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.  Timings with
+node-v0.10.42 are remarkably different, so beware your node version.
 
 encode
 ------
@@ -34,7 +34,7 @@ data.  Includes JSON.stringify timings for comparison.
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 176 | 1200 |  958 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 | 172 |  191 | 1130 |
 | `ObjectId()`            | 100 |  74 |  215 |    x |
-| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 | 190 | 650 | 690 |
+| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 | 190 | 650 | 675 |
 
 
 decode
@@ -47,7 +47,7 @@ Yes, JSON can be up to 140x faster than BSON.
 | data               | bson | buffalo | qbson | json |
 |-------------------------|-----|-----|------|-------|
 | `1234`                  | 100 | 100 |  109 | 10000 |
-| `1234.5`                | 100 |  99 |  104 |  4060 |
+| `1234.5`                | 100 | 100 |  113 |  4115 |
 | `"some \xfftf8 Text"`   | 100 | 101 |   99 |  6760 |
 | <250 chrs, 20% 2b utf8> | 100 | 100 |  104 |  3330 |
 | `{}`                    | 100 |  78 |  110 |  3770 |
@@ -57,7 +57,7 @@ Yes, JSON can be up to 140x faster than BSON.
 | `[1,[2,[3,[4,[5]]]]]`   | 100 | 118 | 1160 | 12700 |
 | `{a:{b:{c:{d:{e:5}}}}}` | 100 |  62 |  182 |  1160 |
 | `ObjectId()`            | 100 |  65 |  125 |     x |
-| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 |  91 | 184 | 1760 |
+| {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null} | 100 |  91 | 190 | 3000 |
 
 utf8
 ----
