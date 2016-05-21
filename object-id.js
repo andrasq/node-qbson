@@ -22,7 +22,8 @@ function ObjectId( value, offset ) {
 }
 
 ObjectId.prototype._get = function _get( ) {
-    return this.bytes ? this.bytes : this.bytes = generateId(this.bytes);
+    // generating into a new array is 35% faster than into a static array [0,0,...0]
+    return this.bytes ? this.bytes : this.bytes = generateId(Array(12));
 }
 
 ObjectId.prototype.copyToBuffer = function copyToBuffer( buffer, offset ) {
@@ -55,51 +56,47 @@ ObjectId.prototype.setFromString = function setFromString( s, from ) {
 }
 
 /*
- * return a unique mongo-id
+ * generate a unique ObjectId into the Buffer (or Array) dst
+ * A mongo id is made of (timestamp + machine id + process id + sequence)
  */
+
 // use a random machine id to keep things simple
-var _sysId = Math.random() * 0x100000000 >>> 8;
-var _sysIdBuf = new Buffer([ _sysId >> 16, _sysId >> 8, _sysId ]);
+var _machId = Math.random() * 0x100000000 >>> 8;
 var _pid = process.pid;
-var _pidBuf = new Buffer([ _pid >> 8, _pid ]);
-// start sequence at a random offset to minimize chance of collision with another machineId
+
+// start sequence at a random offset to minimize chance of collision with another machine id
 var _seq = Math.random() * 0x100000000 >>> 8;
-var _seqBuf = new Buffer([ _seq >> 16, _seq >> 8, _seq ]);
 
-var _lastOverflow = (Date.now() / 1000) >>> 0;
+// overflow occurs when the sequence id laps itself within the same second (same "now" period)
+var _lastSeq = _seq;
+var _lastNow = (Date.now() / 1000) >>> 0;
+
 function _incrementSequence( now ) {
-    // increment the sequence, and test for sequence overflow
-    if (++_seq & 0x1000000) {
-        if (_lastOverflow === now) throw new Error("id sequence overflow");
-        _lastOverflow = now;
-        _seq = 0;
+    _seq = (_seq + 1) & 0xFFFFFF;
+    if (now !== _lastNow) {
+        _lastSeq = _seq;
+        _lastNow = now;
     }
-    return;
-
-    // increment the sequence id with ripple carry, and test for sequence overflow
-    if ((++_seqBuf[2] & 0x100) && (++_seqBuf[1] & 0x100) && (++_seqBuf[0] & 0x100)) {
-        if (_lastOverflow === now) throw new Error("id sequence overflow");
-        _lastOverflow = now;
+    else {
+        if (_seq === _lastSeq) throw new Error("ObjectId sequence overflow");
     }
-    return;
-
 }
 
 function generateId( dst ) {
-    var tm = (Date.now() / 1000) >>> 0;
-    dst[0] = (tm >> 24) & 0xFF;
-    dst[1] = (tm >> 16) & 0xFF;
-    dst[2] = (tm >>  8) & 0xFF;
-    dst[3] = (tm      ) & 0xFF;
+    var now = (Date.now() / 1000) >>> 0;
+    dst[0] = (now >> 24) & 0xFF;
+    dst[1] = (now >> 16) & 0xFF;
+    dst[2] = (now >>  8) & 0xFF;
+    dst[3] = (now      ) & 0xFF;
 
-    _incrementSequence(tm);
+    dst[4] = (_machId >> 16) & 0xFF;
+    dst[5] = (_machId >> 8 ) & 0xFF;
+    dst[6] = _machId & 0xFF;
 
-    dst[4] = _sysIdBuf[0];
-    dst[5] = _sysIdBuf[1];
-    dst[6] = _sysIdBuf[2];
+    dst[7] = (_pid >> 8) & 0xFF;
+    dst[8] = _pid & 0xFF;
 
-    dst[7] = _pidBuf[0];
-    dst[8] = _pidBuf[1];
+    _incrementSequence(now);
 
     dst[9] = (_seq >> 16) & 0xFF;
     dst[10] = (_seq >> 8) & 0xFF;
@@ -143,17 +140,34 @@ if (process.env['NODE_TEST'] === 'object-id') {
 var timeit = require('qtimeit');
 var bson = require('bson');
 var util = require('util');
+var buffalo = require('buffalo');
 
 var id1 = generateId(new Buffer(12));
 var id2 = generateId(new Buffer(12));
 console.log(id1, id2);
 
 var id = new Buffer(12);
-timeit(0x400000, function(){ generateId(id) });
-timeit(0x400000, function(){ generateId(id) });
-timeit(0x400000, function(){ generateId(id) });
+var x;
+timeit(1000000, function(){ generateId(id) });
+timeit(1000000, function(){ generateId(id) });
+timeit(1000000, function(){ generateId(id) });
 // 4.8m/s (without Date.now() would be 60m/s, so adaptive timestamp is good)
 console.log("AR: generated id buffer and _sequence", id, _seq);
+
+timeit(1000000, function(){ x = ObjectId()._get() });
+timeit(1000000, function(){ x = ObjectId()._get() });
+timeit(1000000, function(){ x = ObjectId()._get() });
+
+timeit(1000000, function(){ x = bson.ObjectId() });
+timeit(1000000, function(){ x = bson.ObjectId() });
+timeit(1000000, function(){ x = bson.ObjectId() });
+console.log(x);
+// 625k/s !?
+
+timeit(1000000, function(){ x = buffalo.ObjectId() });
+timeit(1000000, function(){ x = buffalo.ObjectId() });
+timeit(1000000, function(){ x = buffalo.ObjectId() });
+console.log(x);
 
 var buf = generateId(new Buffer(12));
 console.log("AR: new id buf", buf);
