@@ -183,21 +183,26 @@ function getInt64( buf, pos ) {
 // then the whole thing is scaled to the normalized 1.53 position.
 var _rshift32 = (1 / 0x100000000);      // >> 32 for floats
 var _rshift20 = (1 / 0x100000);         // >> 20 for floats
+var _lshift32 = (1 * 0x100000000);      // << 32
+var _rshift52 = (1 * _rshift32 * _rshift20);    // >> 52
 function getFloat( buf, pos ) {
     var lowWord = getUInt32(buf, pos);
     var highWord = getUInt32(buf, pos+4);
-    var mantissa = (highWord & 0x000FFFFF) + lowWord * _rshift32;
+    var mantissa = (highWord & 0x000FFFFF) * _lshift32 + lowWord;
     var exponent = (highWord & 0x7FF00000) >> 20;
+    //var sign = (highWord >> 31);
 
     var value;
     if (exponent === 0x000) {
         // zero if !mantissa, else subnormal (non-normalized reduced precision small value)
-        value = !mantissa ? 0.0 : mantissa * _rshift20;
+        // recover negative zero -0.0 as distinct from 0.0
+        // subnormals do not have an implied leading 1 bit and are positioned 1 bit to the left
+        value = mantissa ? (mantissa * _rshift52) * pow2(-1023 + 1) : (highWord >> 31) ? -0.0 : 0.0;
     }
     else if (exponent < 0x7ff) {
         // normalized value with an implied leading 1 bit and 1023 biased exponent
         exponent -= 1023;
-        value = (1 + mantissa * _rshift20) * pow2(exponent);
+        value = (1 + mantissa * _rshift52) * pow2(exponent);
     }
     else {
         // Infinity if zero mantissa (+/- per sign), NaN if nonzero mantissa
@@ -209,9 +214,8 @@ function getFloat( buf, pos ) {
 // given an exponent n, return 2**n
 // n is always an integer, faster to shift when possible
 function pow2( exp ) {
-    return (exp >= 0 && exp < 31) ? 1 << exp
-        : (exp < 0 && exp > -31) ? 1 / (1 << -exp)
-        : Math.pow(2, exp);
+    return (exp >= 0) ? (exp <  31 ? (1 << exp) :        Math.pow(2, exp))
+                      : (exp > -31 ? (1 / (1 << -exp)) : Math.pow(2, exp));
 }
 
 // extract a decimal number string
