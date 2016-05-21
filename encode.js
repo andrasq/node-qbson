@@ -49,8 +49,15 @@ var T_SCOPED_FUNCTION = 15;     // TBD
 var T_INT = 16;         // 32-bit LE signed twos complement
 var T_TIMESTAMP = 17;   // ignore ?
 var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
-var T_MINKEY = 19;      // ignore
-var T_MAXKEY = 20;      // ignore
+var T_MINKEY = 255;     // ignore
+var T_MAXKEY = 127;     // ignore
+
+var T_BINARY_GENERIC = 5;       // subtype 0
+var T_BINARY_FUNCTION = 5;      // subtype 1
+var T_BINARY_OLD = 5;           // subtype 2
+var T_BINARY_UUID = 5;          // subtype 3
+var T_BINARY_MD5 = 5;           // subtype 5
+var T_BINARY_USER_DEFINED = 5;  // subtype 128
 
 // see also buffalo and json-simple for typing
 function determineTypeId( value ) {

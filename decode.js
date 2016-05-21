@@ -35,8 +35,15 @@ var T_SCOPED_FUNCTION = 15;     // TBD
 var T_INT = 16;         // 32-bit LE signed twos complement
 var T_TIMESTAMP = 17;   // ignore ?
 var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
-var T_MINKEY = 19;      // ignore
-var T_MAXKEY = 20;      // ignore
+var T_MINKEY = 255;     // ignore
+var T_MAXKEY = 127;     // ignore
+
+var T_BINARY_GENERIC = 5;       // subtype 0
+var T_BINARY_FUNCTION = 5;      // subtype 1
+var T_BINARY_OLD = 5;           // subtype 2
+var T_BINARY_UUID = 5;          // subtype 3
+var T_BINARY_MD5 = 5;           // subtype 5
+var T_BINARY_USER_DEFINED = 5;  // subtype 128
 
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var s0 = { val: 0, end: 0 };
@@ -49,79 +56,81 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
         name = s0.val;
         base = s0.end + 1;  // skip string + NUL
 
+        var value;
         switch (type) {
-        case 0x10:      // signed 32-bit little-endian int (10%)
-            target[name] = getInt32(buf, base);
+        case T_INT:
+            value = getInt32(buf, base);
             base += 4;
             break;
-        case 0x02:      // counted utf8 string, length *not* part of count
+        case T_STRING:
             var len = getUInt32(buf, base);
             base += 4;
             var end = base + len - 1;
-            target[name] = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
+            value = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
             base = end + 1;
             if (buf[base-1] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
             break;
-        case 0x03:      // object, length part of count
+        case T_OBJECT:
             var len = getUInt32(buf, base);
-            target[name] = getBsonEntities(buf, base+4, base+len-1, new Object());
+            value = getBsonEntities(buf, base+4, base+len-1, new Object());
             base += len;
             break;
-        case 0x04:      // array, length part of count
+        case T_ARRAY:
             var len = getUInt32(buf, base);
-            target[name] = getBsonEntities(buf, base+4, base+len-1, new Array(), true);
+            value = getBsonEntities(buf, base+4, base+len-1, new Array(), true);
             base += len;
             break;
-        case 0x01:      // 64-bit ieee 754 little-endian float
-            target[name] = getFloat(buf, base);
+        case T_FLOAT:
+            value = getFloat(buf, base);
             base += 8;
             break;
-        case 0x08:      // 1B, boolean
-            target[name] = buf[base] ? true : false;
+        case T_BOOLEAN:
+            value = buf[base] ? true : false;
             base += 1;
             break;
-        case 0x0a:      // null
-            target[name] = null;
+        case T_NULL:
+            value = null;
             break;
-        case 0x05:      // binary
+        case T_BINARY_0:
             var len = getUInt32(buf, base);
             var subtype = buf[base+4];
             base += 5;
-            target[name] = buf.slice(base, base+len);
-            if (subtype !== 0) target[name].subtype = subtype;
+            value = buf.slice(base, base+len);
+            if (subtype !== 0) value.subtype = subtype;
             base += len;
             // TODO: why does bson return the Buffer wrappered in an object?
             // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
             // we annotate with .subtype like `buffalo` does
             break;
-        case 0x06:      // deprecated (undefined)
-            target[name] = undefined
+        case T_UNDEFINED:
+            value = undefined
             break;
-        case 0x07:      // ObjectId
-            target[name] = new ObjectId().setFromBuffer(buf, base);
+        case T_OBJECTID:
+            value = new ObjectId().setFromBuffer(buf, base);
             base += 12;
             break;
-        case 0x09:      // Date()
-            target[name] = new Date(getInt64(buf, base));
+        case T_DATE:
+            value = new Date(getInt64(buf, base));
             base += 8;
             break;
-        case 0x0b:      // RegExp()
+        case T_REGEXP:
             scanRegExp(buf, base, bound, s0);
-            target[name] = s0.val;
+            value = s0.val;
             base = s0.end;
             break;
-        case 0x12:      // int64
-            target[name] = getInt64(buf, base);
+        case T_LONG:
+            value = getInt64(buf, base);
             base += 8;
-        case 0x0c:      // deprecated (db ref)
-        case 0x0d:      // Function()
-        case 0x0e:      // symbol
-        case 0x0f:      // code with scope
-        case 0x11:      // timestamp
+        case T_DBREF:
+        case T_FUNCTION:
+        case T_SYMBOL:
+        case T_SCOPED_FUNCTION:
+        case T_TIMESTAMP:
         default:
             throw new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + start);
             break;
         }
+        target[name] = value;
         if (base > bound) throw new Error("truncated bson, overran end from " + start);
     }
     return target;
@@ -422,37 +431,8 @@ timeit(nloops, function(){ a = buffalo.parse(x) });
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
 // bson items:  type, name, value
-// name: NUL-terminated bytes (cannot contain NUL byte!)
-// value: type-specific value
-/** from buffalo/lib/bson.js, with notes by AR:
-var FLOAT_TYPE             = 1                                  // 64-bit IEEE 754 float
-var STRING_TYPE            = 2                                  // 4B count (including NUL byte) + NUL-terminated string
-var EMBEDDED_DOCUMENT_TYPE = 3                                  // length (including terminating zero byte) + items contents
-var ARRAY_TYPE             = 4                                  // length, then ascii numeric key then value; then terminating 0 byte
-var BINARY_TYPE            = 5
-var UNDEFINED_TYPE         = 6 // deprecated
-var OBJECT_ID_TYPE         = 7
-var BOOLEAN_TYPE           = 8                                  // 1B, 00 or 01
-var DATE_TIME_TYPE         = 9
-var NULL_TYPE              = 0x0A                               // null and undefined, no value
-var REG_EXP_TYPE           = 0x0B
-var DB_REF_TYPE            = 0x0C // deprecated
-var CODE_TYPE              = 0x0D
-var SYMBOL_TYPE            = 0x0E
-var CODE_WITH_SCOPE_TYPE   = 0x0F
-var INT32_TYPE             = 0x10                               // 4B 32-bit signed little-endian
-var TIMESTAMP_TYPE         = 0x11
-var INT64_TYPE             = 0x12
-var MIN_KEY                = 0xFF
-var MAX_KEY                = 0x7F
-
-var BINARY_GENERIC_SUBTYPE      = 0x00
-var BINARY_FUNCTION_SUBTYPE     = 0x01
-var BINARY_OLD_SUBTYPE          = 0x02
-var BINARY_UUID_SUBTYPE         = 0x03
-var BINARY_MD5_SUBTYPE          = 0x05
-var BINARY_USER_DEFINED_SUBTYPE = 0x80
-**/
+//   name: NUL-terminated bytes (cannot contain NUL byte!)
+//   value: type-specific value
 
 // NaN: as 64-bit float 01 00 00 00 00 00 f0 7f
 // Infinity: as float   00 00 00 00 00 00 f0 75
