@@ -158,7 +158,7 @@ function getInt64( buf, pos ) {
     // extract a Number from 64-bit signed integer
     // Not all 64-bit ints are representable, Number has only 53 bits of precision.
     var v1 = getInt32(buf, pos+4);
-    // this trick should work for 2-s complement + and - numbers within range
+    // this trick should work for 2-s complement +/- numbers within range
     // note that overflow of a negative could flip the sign!
     return (v1 * 0x100000000) + getUInt32(buf, pos);
 }
@@ -166,7 +166,7 @@ function getInt64( buf, pos ) {
 /*
  * extract the 64-bit little-endian ieee 754 floating-point value 
  *   see http://en.wikipedia.org/wiki/Double-precision_floating-point_format
- *   1 bit sign + 11 bits exponent + (1 hidden 1 bit) + 52 bits mantissa (stored)
+ *   1 bit sign + 11 bits exponent + (1 hidden mantissa 1 bit) + 52 bits mantissa (stored)
  */
 // recover the mantissa into a 20.32 bit fixed-point float,
 // then convert by shifting into the normalized 1.53 format
@@ -182,20 +182,20 @@ function getFloat( buf, pos ) {
 
     var value;
     if (exponent === 0x000) {
-        // zero if !mantissa, else subnormal (non-normalized small value)
+        // zero if !mantissa, else subnormal (non-normalized reduced precision small value)
         value = !mantissa ? 0.0 : mantissa * _rshift20;
     }
     else if (exponent < 0x7ff) {
-        // normalized value with an implied 53rd 1 bit and 1023-biased exponent
+        // normalized value with an implied leading 1 bit and 1023 biased exponent
         exponent -= 1023;
         value = (1 + mantissa * _rshift20) * pow2(exponent);
     }
     else {
-        // 0x7ff with zero mantissa is signed Infinity, nonzero mantissa is NaN
+        // Infinity if zero mantissa (+/- per sign), NaN if nonzero mantissa
         value = mantissa ? NaN : Infinity;
     }
 
-    return (highWord >> 31) ? -value : value;   // sign bit
+    return (highWord >> 31) ? -value : value;  // sign bit
 }
 // given an exponent n, return 2**n
 // n is always an integer, faster to shift when possible
