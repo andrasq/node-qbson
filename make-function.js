@@ -21,11 +21,17 @@ module.exports = makeFunction;
  * the function is to be eval-d (http://bsonspec.org/spec.html)
  */
 function makeFunction( code, scope ) {
-    if (!scope) scope = {};
-
-    // eval returns the value of the expression, but nothing for function definitions
-    // Coerce the function definition to an expression with ||.
-    // Note that `eval` will throw on error.
-
-    with (scope) { return eval("false || " + code); }
+    try {
+        // eval(code) returns nothing for a function definition, so set f
+        // (or could coerce to an expression with eval("false||"+code)
+        code = "var f = " + code;
+        if (scope) with (scope) eval(code); else eval(code)
+        return f;
+    }
+    catch (err) {
+        // eval throws, self-protect against parse errors.
+        // TODO: kill the app?  replace with null?  with a noop?
+        // or return the error, which will kill the caller when run?
+        return err;
+    }
 }
