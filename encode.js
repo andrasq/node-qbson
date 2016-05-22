@@ -123,7 +123,7 @@ function guessSize( value ) {
     case T_DATE: return 8;
     case T_OBJECT: return guessCompoundSize(value);
     case T_ARRAY: return guessCompoundSize(value);
-    case T_REGEXP: return 3 * value.source.length + 1 + 3 + 1;
+    case T_REGEXP: return 3 * value.source.length + 1 + 6 + 1;
     default: return guessVariableSize(id, value);
     }
 }
