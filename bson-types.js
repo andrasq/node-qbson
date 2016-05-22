@@ -27,6 +27,7 @@ module.exports = {
     MinKey: MinKey,
     MaxKey: MaxKey,
     Long: Long,
+    DbRef: DbRef,
     makeFunction: makeFunction,
 
     typeIds: typeIds(),
@@ -67,35 +68,38 @@ function typeIds() { return {
 }}
 
 function typeInfo() { return [
-    null,
-    { id: typeIds.T_FLOAT,              name: 'Float',          size: 8 },
-    { id: typeIds.T_STRING,             name: 'String',         size: -1 },
-    { id: typeIds.T_OBJECT,             name: 'Object',         size: -1 },
-    { id: typeIds.T_ARRAY,              name: 'Array',          size: -1 },
-    { id: typeIds.T_BINARY,             name: 'Binary_0',       size: -1 },
-    { id: typeIds.T_UNDEFINED,          name: 'Undefined',      size: 0 },
-    { id: typeIds.T_OBJECTID,           name: 'ObjectId',       size: 12 },
-    { id: typeIds.T_BOOLEAN,            name: 'Boolean',        size: 1 },
-    { id: typeIds.T_DATE,               name: 'Date',           size: 8 },
-    { id: typeIds.T_NULL,               name: 'Null',           size: 0 },
-    { id: typeIds.T_REGEXP,             name: 'RegExp',         size: -1 },
-    { id: typeIds.T_DBREF,              name: 'DbRef',          size: -1 },
-    { id: typeIds.T_FUNCTION,           name: 'Function',       size: -1 },
-    { id: typeIds.T_SYMBOL,             name: 'Symbol',         size: -1 },
-    { id: typeIds.T_SCOPED_FUNCTION,    name: 'ScopedFunction', size: -1 },
-    { id: typeIds.T_INT,                name: 'Int',            size: 4 },
-    { id: typeIds.T_TIMESTAMP,          name: 'Timestamp',      size: 8 },
-    { id: typeIds.T_LONG,               name: 'Long',           size: 8 },
-    { id: typeIds.T_MINKEY,             name: 'MinKey',         size: 0 },
-    { id: typeIds.T_MAXKEY,             name: 'MaxKey',         size: 0 },
+    { id: 0 },
+    { id: typeIds.T_FLOAT,              key: 'T_FLOAT',         name: 'Float',          size: 8 },
+    { id: typeIds.T_STRING,             key: 'T_STRING',        name: 'String',         size: -1 },
+    { id: typeIds.T_OBJECT,             key: 'T_OBJECT',        name: 'Object',         size: -1 },
+    { id: typeIds.T_ARRAY,              key: 'T_ARRAY',         name: 'Array',          size: -1 },
+    { id: typeIds.T_BINARY,             key: 'T_BINARY',        name: 'Binary_0',       size: -1 },
+    { id: typeIds.T_UNDEFINED,          key: 'T_UNDEFINED',     name: 'Undefined',      size: 0 },
+    { id: typeIds.T_OBJECTID,           key: 'T_OBJECTID',      name: 'ObjectId',       size: 12 },
+    { id: typeIds.T_BOOLEAN,            key: 'T_BOOLEAN',       name: 'Boolean',        size: 1 },
+    { id: typeIds.T_DATE,               key: 'T_DATE',          name: 'Date',           size: 8 },
+    { id: typeIds.T_NULL,               key: 'T_NULL',          name: 'Null',           size: 0 },
+    { id: typeIds.T_REGEXP,             key: 'T_REGEXP',        name: 'RegExp',         size: -1 },
+    { id: typeIds.T_DBREF,              key: 'T_DBREF',         name: 'DbRef',          size: -1 },
+    { id: typeIds.T_FUNCTION,           key: 'T_FUNCTION',      name: 'Function',       size: -1 },
+    { id: typeIds.T_SYMBOL,             key: 'T_SYMBOL',        name: 'Symbol',         size: -1 },
+    { id: typeIds.T_SCOPED_FUNCTION,  key: 'T_SCOPED_FUNCTION', name: 'ScopedFunction', size: -1 },
+    { id: typeIds.T_INT,                key: 'T_INT',           name: 'Int',            size: 4 },
+    { id: typeIds.T_TIMESTAMP,          key: 'T_TIMESTAMP',     name: 'Timestamp',      size: 8 },
+    { id: typeIds.T_LONG,               key: 'T_LONG',          name: 'Long',           size: 8 },
+    { id: typeIds.T_MINKEY,             key: 'T_MINKEY',        name: 'MinKey',         size: 0 },
+    { id: typeIds.T_MAXKEY,             key: 'T_MAXKEY',        name: 'MaxKey',         size: 0 },
 ]}
 
-function typeSizes() { return [
-  undefined, // 0
-  8, undefined, undefined, undefined, undefined, 0, 12, 1,              // 1-8
-  8, 0, undefined, undefined, undefined, undefined, undefined, 4,       // 9-16
-  8, 8, undefined, undefined                                            // 17-20
-]}
+function typeSizes() {
+    var info = typeInfo();
+    var sizes = new Array();
+    for (var i=0; i<info.length; i++) {
+        if (info[i].id) sizes[info[i].id] = sizes[info[i]].size < 0 ? undefined : sizes[info[i]].size;
+    }
+    return sizes;
+}
+
 
 /*
  * From https://docs.mongodb.com/v3.0/reference/bson-types/#timestamps
@@ -108,12 +112,12 @@ function typeSizes() { return [
  * Timestamp values are a 64 bit value where:  the first 32 bits are a
  * time_t value (seconds since the Unix epoch) the second 32 bits are an
  * incrementing ordinal for operations within a given second.
+ * (note: stored in little endian format, the second word first)
  */
-
 function Timestamp( t, i ) {
     this.Timestamp = 1;
-    this.t = t;
-    this.i = i;
+    this.time = t;
+    this.inc = i;
 }
 
 /*
@@ -136,6 +140,14 @@ function MaxKey( ) {
 
 // stub in Long, actual implementation should extend this class
 function Long( lowWord, highWord ) {
-    this.lo = lowWord;
-    this.hi = highWord;
+    this.Long = 1;
+    this.low32 = lowWord;
+    this.high32 = highWord;
+    // TODO: init from bytes? eg (buf, base)
+}
+
+// DbRef is a weird internal mongodb creature, deprecated.
+function DbRef( name, id ) {
+    this.name = name;
+    this.id = id;
 }

@@ -24,4 +24,5 @@ module.exports = {
     Long: bsonTypes.Long,
     MinKey: bsonTypes.MinKey,
     MaxKey: bsonTypes.MaxKey,
+    DbRef: bsonTypes.dbRef,
 };

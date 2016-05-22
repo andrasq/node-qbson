@@ -207,7 +207,7 @@ function pow2( exp ) {
                       : (exp > -31 ? (1 / (1 << -exp)) : Math.pow(2, exp));
 }
 
-// extract a decimal number string
+// extract a decimal numeric "cstring" as a number
 function scanIntZ( buf, base, item ) {
     var n = 0;
     for (var i=base; buf[i]; i++) {
@@ -217,7 +217,7 @@ function scanIntZ( buf, base, item ) {
     return (item.end = i) + 1;
 }
 
-// get the NUL-terminated string
+// get the NUL-terminated utf8 "cstring" string
 function scanStringZ( buf, base, item ) {
     for (var i=base; buf[i]; i++) ;
     // breakeven is around 13 chars (node 5; more with node 6)
