@@ -11,16 +11,17 @@
 
 var encode = require('./encode.js');
 var decode = require('./decode.js');
-var ObjectId = require('./object-id.js');
+var bsonTypes = require('./bson-types.js');
 
 module.exports = {
     encode: encode,
     decode: decode,
     toJson: null,
-    ObjectId: ObjectId,
-    ObjectID: ObjectId,
+
+    ObjectId: bsonTypes.ObjectId,
+    ObjectID: bsonTypes.ObjectId,
+    Timestamp: bsonTypes.Timestamp,
+    Long: bsonTypes.Long,
+    MinKey: bsonTypes.MinKey,
+    MaxKey: bsonTypes.MaxKey,
 };
-
-var utf8 = require('./utf8.js');
-
-// work in progress
