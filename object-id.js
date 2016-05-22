@@ -7,12 +7,29 @@
 
 'use strict';
 
-
 module.exports = ObjectId;
 
 
+/*
+ * From https://docs.mongodb.com/v3.0/reference/bson-types/#objectid
+ *
+ * ObjectIds are small, likely unique, fast to generate, and ordered.  ObjectId
+ * values consists of 12-bytes, where the first four bytes are a timestamp that
+ * reflect the s creation, specifically:
+ *
+ * - a 4-byte value representing the seconds since the Unix epoch,
+ * - a 3-byte machine identifier,
+ * - a 2-byte process id, and
+ * - a 3-byte counter, starting with a random value.ObjectId
+ *
+ * AR note: the timetamp and sequence are stored in big-endian order,
+ * so I store the machine id and pid that way too.  Can't tell how
+ * mongo does it, it seems to use random values for machine id and pid.
+ */
+
 function ObjectId( value, offset ) {
     if (!this || this === global) return new ObjectId(value, offset);
+    this.str = null;
     this.bytes = null;
     if (value) {
         if (!offset) offset = 0;
@@ -32,6 +49,8 @@ ObjectId.prototype.copyToBuffer = function copyToBuffer( buffer, offset ) {
     return offset+i;
 }
 
+// note that this version of toString is compatible with the bson driver,
+// but mongodb specifies a bizarra 'ObjectId("...")' format.
 ObjectId.prototype.toString = function toString( ) {            // value for string context (eg "" +)
     return bytesToHex(this._get(), 0, 12);
 }
@@ -54,6 +73,18 @@ ObjectId.prototype.setFromString = function setFromString( s, from ) {
     }
     return this;
 }
+
+// mongo compat
+ObjectId.prototype.getTimestamp = function getTimestamp( ) {
+    var bytes = this._get();
+    return new Date((bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[4]) >>> 0);
+}
+
+// mongo compat
+ObjectId.prototype.valueOf = function valueOf( ) {
+    return this.str = this.toJSON();
+}
+
 
 /*
  * generate a unique ObjectId into the Buffer (or Array) dst
