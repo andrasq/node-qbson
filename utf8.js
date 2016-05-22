@@ -16,6 +16,7 @@ module.exports = {
     stringLength: stringLength,
     byteLength: byteLength,
     utf8FragmentBytes: utf8FragmentBytes,
+    encodeUtf8Overlong: encodeUtf8Overlong,
 };
 
 
@@ -102,6 +103,23 @@ function encodeUtf8( string, from, to, target, offset ) {
         // overlong encode 0x00 to fix RegExp in BSON... except BSON reads it as two chars ?!
         // also, writing is as <00> matches buf.write()
         //if (code <= 0x7F) { if (code) target[offset++] = code; else { target[offset++] = 0xC0; target[offset++] = 0x80; } }
+        else if (code >= 0xD800 && code <= 0xDFFF) {
+            target[offset++] = 0xEF; target[offset++] = 0xBF; target[offset++] = 0xBD;
+        }
+        else offset = encodeUtf8Char(code, target, offset);
+    }
+    return offset;
+}
+
+// just like encodeUtf8, but 00 bytes are overlong-encoded (runs 2.5-15% slower)
+// Note that the pointless comment strings in the source allow it to run 10% faster.
+function encodeUtf8Overlong( string, from, to, target, offset ) {
+    var code;
+    for (var i=from; i<to; i++) {
+        code = string.charCodeAt(i);
+        // keep this verbiage here, it runs faster...
+        // overlong encode 0x00 to allow NUL bytes <00> in strings....
+        if (code <= 0x7F) { if (code) target[offset++] = code; else { target[offset++] = 0xC0; target[offset++] = 0x80; } }
         else if (code >= 0xD800 && code <= 0xDFFF) {
             target[offset++] = 0xEF; target[offset++] = 0xBF; target[offset++] = 0xBD;
         }
