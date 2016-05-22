@@ -3,6 +3,8 @@
  *
  * This file is derived from andrasq/node-json-simple/lib/parse-bson.js
  *
+ * See also http://bsonspec.org/spec.html
+ *
  * Copyright (C) 2015-2016 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
@@ -11,43 +13,22 @@
 
 module.exports = bson_decode;
 
-var ObjectId = require('./object-id.js');
+
+var bsonTypes = require('./bson-types');
+
+var ObjectId = bsonTypes.ObjectId;
+var Timestamp = bsonTypes.Timestamp;
+var MinKey = bsonTypes.MinKey;
+var MaxKey = bsonTypes.MaxKey;
+var Long = bsonTypes.Long;
 
 function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
 }
 
-var T_FLOAT = 1;        // 64-bit IEEE 754 float
-var T_STRING = 2;       // 4B length (including NUL byte but not the length bytes) + string + NUL
-var T_OBJECT = 3;       // length (including length bytes and terminating NUL byte) + items as asciiZ name & value + NUL
-var T_ARRAY = 4;        // length (including length and NUL) + items as asciiZ offset number & value + NUL
-var T_BINARY_0 = 5;     // length (not including length bytes or subtype) + subtype + length bytes
-var T_UNDEFINED = 6;    // deprecated
-var T_OBJECTID = 7;
-var T_BOOLEAN = 8;      // 1B true 01 / false 00
-var T_DATE = 9;         // Date.now() timestamp stored as 64-bit LE integer
-var T_NULL = 10;        // 0B
-var T_REGEXP = 11;      // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
-var T_DBREF = 12;       // deprecated
-var T_FUNCTION = 13;    // function source
-var T_SYMBOL = 14;              // TBD
-var T_SCOPED_FUNCTION = 15;     // TBD
-var T_INT = 16;         // 32-bit LE signed twos complement
-var T_TIMESTAMP = 17;   // ignore ?
-var T_LONG = 18;                // TBD  // 64-bit LE signed twos complement
-var T_MINKEY = 255;     // ignore
-var T_MAXKEY = 127;     // ignore
-
-var T_BINARY_GENERIC = 5;       // subtype 0
-var T_BINARY_FUNCTION = 5;      // subtype 1
-var T_BINARY_OLD = 5;           // subtype 2
-var T_BINARY_UUID = 5;          // subtype 3
-var T_BINARY_MD5 = 5;           // subtype 5
-var T_BINARY_USER_DEFINED = 5;  // subtype 128
-
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var s0 = { val: 0, end: 0 };
-    var type, subtype, name, len, start;
+    var type, subtype, name, start;
 
     while (base < bound) {
         start = base;
@@ -58,78 +39,86 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
 
         var value;
         switch (type) {
-        case T_INT:
+        case 16:
             value = getInt32(buf, base);
             base += 4;
             break;
-        case T_STRING:
-            var len = getUInt32(buf, base);
-            base += 4;
-            var end = base + len - 1;
-            value = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
-            base = end + 1;
-            if (buf[base-1] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
+        case 14:
+        case 2:
+            base = scanString(buf, base, bound, s0);
+            value = s0.val;
             break;
-        case T_OBJECT:
+        case 3:
             var len = getUInt32(buf, base);
             value = getBsonEntities(buf, base+4, base+len-1, new Object());
             base += len;
             break;
-        case T_ARRAY:
+        case 4:
             var len = getUInt32(buf, base);
             value = getBsonEntities(buf, base+4, base+len-1, new Array(), true);
             base += len;
             break;
-        case T_FLOAT:
+        case 1:
             value = getFloat(buf, base);
             base += 8;
             break;
-        case T_BOOLEAN:
-            value = buf[base] ? true : false;
-            base += 1;
+        case 5:
+            base = scanBinary(buf, base, bound, s0);
+            value = s0.val;
             break;
-        case T_NULL:
-            value = null;
-            break;
-        case T_BINARY_0:
-            var len = getUInt32(buf, base);
-            var subtype = buf[base+4];
-            base += 5;
-            value = buf.slice(base, base+len);
-            if (subtype !== 0) value.subtype = subtype;
-            base += len;
-            // TODO: why does bson return the Buffer wrappered in an object?
-            // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
-            // we annotate with .subtype like `buffalo` does
-            break;
-        case T_UNDEFINED:
+        case 6:
             value = undefined
             break;
-        case T_OBJECTID:
+        case 7:
             value = new ObjectId().setFromBuffer(buf, base);
             base += 12;
             break;
-        case T_DATE:
+        case 8:
+            value = buf[base] ? true : false;
+            base += 1;
+            break;
+        case 9:
             value = new Date(getInt64(buf, base));
             base += 8;
             break;
-        case T_REGEXP:
-            scanRegExp(buf, base, bound, s0);
-            value = s0.val;
-            base = s0.end;
+        case 10:
+            value = null;
             break;
-        case T_LONG:
-            value = getInt64(buf, base);
+        case 11:
+            base = scanRegExp(buf, base, bound, s0);
+            value = s0.val;
+            break;
+        case 18:
+            value = new Long(getUInt32(buf, base), getUInt32(buf, base+4));
             base += 8;
-        case T_DBREF:
-        case T_FUNCTION:
-        case T_SYMBOL:
-        case T_SCOPED_FUNCTION:
-        case T_TIMESTAMP:
+        case 13:
+            base = scanString(buf, base, bound, s0);
+            value = bsonTypes.makeFunction(s0.val);
+            break;
+        case 15:
+            // length is redundant, skip +4
+            base = scanString(buf, base+4, bound, s0);
+            var len = getUInt32(buf, base);
+            var scope = getBsonEntities(buf, base+4, base+len-1, new Object())
+            value = bsonTypes.makeFunction(s0.val, scope);
+            base += len;
+            break;
+        case 17:
+            value = new Timestamp(getUInt32(buf, base), getUInt32(buf, base+4));
+            base += 8;
+            break;
+        case 255:
+            value = new MinKey();
+            break;
+        case 127:
+            value = new MaxKey();
+            break;
+        case 12:        // stringZ name, 12B ref
         default:
             throw new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + start);
             break;
         }
+
         target[name] = value;
         if (base > bound) throw new Error("truncated bson, overran end from " + start);
     }
@@ -225,7 +214,7 @@ function scanIntZ( buf, base, item ) {
         n = n * 10 + buf[i] - 0x30;
     }
     item.val = n;
-    item.end = i;
+    return (item.end = i) + 1;
 }
 
 // get the NUL-terminated string
@@ -233,8 +222,8 @@ function scanStringZ( buf, base, item ) {
     for (var i=base; buf[i]; i++) ;
     // breakeven is around 13 chars (node 5; more with node 6)
     if (i < base + 12) return scanStringUtf8(buf, base, item);
-    item.end = i;
-    return item.val = buf.toString('utf8', base, i);
+    item.val = buf.toString('utf8', base, i);
+    return (item.end = i) + 1;
 }
 
 // get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
@@ -249,7 +238,7 @@ function scanStringUtf8( buf, base, item ) {
         // TODO: should validity test succeeding chars
     }
     item.val = str;
-    item.end = i;
+    return (item.end = i) + 1;
 }
 
 // extract a regular expression from the bson buffer
@@ -285,7 +274,7 @@ function scanRegExp( buf, base, bound, item ) {
             }
         }
     }
-    item.end = base;
+    return item.end = base;
 }
 
 function createRegExp( pattern, flags ) {
@@ -294,6 +283,30 @@ function createRegExp( pattern, flags ) {
     } catch (err) {
         return new RegExp(pattern);
     }
+}
+
+// recover the string entity from the bson
+function scanString( buf, base, bound, item ) {
+    var len = getUInt32(buf, base);
+    base += 4;
+    var end = base + len - 1;
+    if (buf[end] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
+    // our pure js getString() is faster for short strings
+    item.val = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
+    return item.end = end + 1;
+}
+
+function scanBinary( buf, base, bound, item ) {
+    var len = getUInt32(buf, base);
+    var subtype = buf[base+4];
+    base += 5;
+    item.val = buf.slice(base, base+len);
+    item.val.subtype = buf[base-1];
+    return item.end = base += len;
+
+    // TODO: why does bson return the Buffer wrappered in an object?
+    // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
+    // We return a Buffer annotated with .subtype like `buffalo` does.
 }
 
 
@@ -352,12 +365,11 @@ var data = bson.ObjectId("123456781234567812345678");
 //var data = require("/home/andras/work/src/kds.git/config.json");
 //var data = o;                           // 350% +/- (compound w/ array; 15% w/o)
 //var data = require('./dataBatch.js');
+//var data = require('./prod-data.js');
 var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
-var data = require('./prod-data.js');
-var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};
 var data = 1234.5;
-
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -421,7 +433,7 @@ timeit(nloops, function(){ a = bson_decode(x) });
 
 var json = JSON.stringify(data);
 timeit(nloops, function(){ a = JSON.parse(json) });
-console.log(json);
+//console.log(json);
 
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 //console.log(a && a[Object.keys(a)[0]]);
