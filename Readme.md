@@ -19,7 +19,8 @@ encode
 
 Encoding rates for an object with 10 fields (field names 25 ascii chars long;
 5-char field names boost qbson throughput 25-50%), each field containing the same
-data.  Includes JSON.stringify timings for comparison.
+data.  Includes JSON.stringify timings for comparison.  These are _rates_, higher
+is better.
 
 | data               | bson | buffalo | qbson | json |
 |-------------------------|-----|-----|------|------|
