@@ -13,6 +13,9 @@
 var utf8 = require('./utf8.js');
 
 module.exports = bson_encode;
+module.exports.guessSize = guessSize;
+module.exports.encodeEntities = encodeEntities;
+module.exports.putInt32 = putInt32;
 
 var ObjectId = require('./object-id.js');
 
@@ -206,6 +209,7 @@ function encodeEntity( name, value, target, offset ) {
     case T_REGEXP:
         offset = putStringZ(value.source, target, offset);
         var flags = (value.global ? 'g' : '') + (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '');
+        // BSON supports additional flags 'l', 'u', 'x' that are not valid in javascript
         offset = putStringZ(flags, target, offset);
         break;
     case T_BINARY_0:

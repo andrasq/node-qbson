@@ -12,6 +12,8 @@
 'use strict';
 
 module.exports = bson_decode;
+module.exports.getBsonEntities = getBsonEntities;
+module.exports.getUInt32 = getUInt32;
 
 
 var bsonTypes = require('./bson-types');

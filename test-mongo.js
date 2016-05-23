@@ -3,6 +3,10 @@ var qbson = require('./qbson');
 var utf8 = require('./utf8');
 var QBuffer = require('qbuffer');
 
+
+var OP_REPLY = 1;
+var OP_QUERY = 2004;
+
 /**
 
 Opcode Name     Value   Comment
@@ -15,6 +19,17 @@ OP_QUERY        2004    Query a collection.
 OP_GET_MORE     2005    Get more data from a query. See Cursors.
 OP_DELETE       2006    Delete documents.
 OP_KILL_CURSORS 2007    Notify database that the client has finished with the cursor.
+
+query flags:
+0 - reserved, must be 0.
+1 - TailableCursor
+2 - SlaveOk
+3 - OplogReplay (internal)
+4 - NoCursorTimeout (10 min recycle abandoned cursors)
+5 - AwaitData (block waiting for more data, or timeout)
+6 - Exhaust (stream in multiple "more" packages until done.  Most efficient for bulk)
+7 - PartialOk (if some shards are down, better some data than none)
+8-31 - reserved, must be 0.
 
 struct MsgHeader {
     int32   messageLength; // total message size, including this
@@ -55,14 +70,6 @@ struct OP_REPLY {
 **/
 
 
-function encodeMongoCommand( header, cmd ) {
-    var flags = cmd.flags || 0;
-    var collectionName = cmd.collectionName;
-    var skip = cmd.skip || 0;
-    var limit = cmd.limit || defaultBatchSize;
-}
-
-
 var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
 
@@ -87,47 +94,71 @@ function decodeHeader( buf, offset ) {
 function decodeReply( buf, base, bound ) {
     var reply = {
         // TODO: flatten header fields into reply
-        header: decodeHeader(buf, base),
+        header: null, // caller already has the header
         responseFlags: getUInt32(buf, base+16),
         cursorId: new qbson.Long(getUInt32(buf, base+20), getUInt32(buf, base+24)),
         startingFrom: getUInt32(buf, base+28),
         numberReturned: getUInt32(buf, base+32),
+        error: null,
         documents: new Array(),
     };
     base += 16 + 20;
 
     // documents are end-to-end concatenated bson objects (mongodump format)
+    var numberFound = 0;
     while (base < bound) {
         var len = getUInt32(buf, base);
-// RACE? without the next console.log, offset error.  With it, runs fine.
-//console.log("AR: decoding from %d to %d", base, base+len, buf.length);
         // return raw items, separate but do not decode the returned documents
         var obj = buf.slice(base+4, base+len-1);
-//var obj = qbson.decode.getBsonEntities(buf, base+4, base+len-1, new Object());
         reply.documents.push(obj);
         base += len;
+        numberFound += 1;
     }
-    if (base !== bound) throw new Error("corrupt bson, incomplete entity " + base + " of " + bound);
+    if (base !== bound) {
+        // FIXME: clean up without killing self.
+        console.log("incomplete entity, header:", reply.header, reply.responseFlags.toString(16), buf.slice(base), reply.error);
+        throw new Error("corrupt bson, incomplete entity " + base + " of " + bound);
+    }
+    if (numberFound !== reply.numberReturned) {
+        // FIXME: handle this better
+        throw new Error("git not get expected number of documents, got " + numberFound + " vs " + reply.numberReturned);
+    }
+
     return reply;
 }
 
-var query = {};
-var fields = {_id:1, a:1};
-var szQuery = qbson.encode.guessSize(query);
-var szFields = qbson.encode.guessSize(fields);
-var collectionName = 'test.test';
-var msg = new Buffer(16 + 4+(3*collectionName.length+1)+8 + 1);
-var offset = 0;
-encodeHeader(msg, 0,  0, 1, 0, 2004);
-offset = utf8.encodeUtf8Overlong(collectionName, 0, collectionName.length, msg, 20);    // ns
-msg[offset++] = 0;
-offset = qbson.encode.putInt32(0, msg, offset);         // skip
-offset = qbson.encode.putInt32(1, msg, offset);        // limit
-offset = qbson.encode.encodeEntities(query, msg, offset);
-//offset = qbson.encode.encodeEntities(fields, msg, offset);
-qbson.encode.putInt32(offset, msg, 0);  // messageLength
-msg = msg.slice(0, offset);
-console.log("AR: BUILT", msg);
+var _lastRequestId = 0;
+function makeRequestId( ) {
+    return ++_lastRequestId;
+}
+
+function buildQuery( ns, query, fields, skip, limit ) {
+    // allocate a buffer to hold the query
+    // TODO: keep buffers of the common sizes on free lists
+    var szQuery = qbson.encode.guessSize(query);
+    var szFields = qbson.encode.guessSize(fields);
+    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1;
+    // normalize query sizes for easier reuse (TODO: maintain own free list)
+    if (bufSize < 1000) bufSize = 1000;
+    var msg = new Buffer(bufSize);
+
+    // build the query
+    var offset = 0;
+    offset = putInt32(0, msg, 16);                              // flags, must be set
+    offset = utf8.encodeUtf8Overlong(ns, 0, ns.length, msg, 20); // ns
+    msg[offset++] = 0;  // NUL byte cstring terminator
+    offset = putInt32(skip, msg, offset);          // skip
+    offset = putInt32(limit, msg, offset);         // limit
+    offset = qbson.encode.encodeEntities(query, msg, offset);   // query
+    if (fields) offset = qbson.encode.encodeEntities(fields, msg, offset);  // fields
+    msg = msg.slice(0, offset);
+
+    // encode the header once the final size is known
+    encodeHeader(msg, 0,  offset, makeRequestId(), 0, OP_QUERY);
+
+    return msg;
+}
+
 
 function fptime(){
     var t = process.hrtime();
@@ -137,24 +168,40 @@ function fptime(){
 var qbuf = new QBuffer({ encoding: null });
 
 var prevChunk = null;
-function dispatchReplies( chunk, handler ) {
+function dispatchReplies( chunk, handler, cb ) {
     // FIXME: O(n^2) buffer concat for multi-part replies!!
     if (prevChunk) chunk = Buffer.concat([prevChunk, chunk]);
 
-    // need at least the 16 byte header to decode
     var offs = 0;
-    while (offs + 16 < chunk.length) {
-        // FIXME: decode header here, not in the reply!  we need the length
-        if (offs + 4 >= chunk.length) break;
-        var len = getUInt32(chunk, offs);
-        var end = offs + len;
-        if (end > chunk.length) break;
-console.log("AR: decoding reply from/to", len, offs, offs+len);
-        var reply = decodeReply(chunk, offs, end);
-//console.log("AR: got reply", reply);
-        offs = end;
+    while (offs + 4 < chunk.length) {
+        var replyLength = getUInt32(chunk, offs);
+console.log("AR: MARK", replyLength, offs, chunk.length, chunk.slice(offs));
+        if (offs + replyLength > chunk.length) break;
+
+        var header = decodeHeader(chunk, offs);
+        switch (header.opCode) {
+        case OP_REPLY:
+console.log("AR: about to decode nbytes from/to", replyLength, offs, offs+replyLength, chunk.slice(offs), header);
+            var reply = decodeReply(chunk, offs, offs+replyLength);
+            reply.header = header;
+            var err = null;
+            if (reply.responseFlags & 2) {
+                // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
+                reply.error = qbson.decode.getBsonEntities(reply.documents[0], 0, reply.documents[0].length, {})
+                err = new Error();
+                for (var k in reply.error) err[k] = reply.error[k];
+            }
+console.log("AR: reply is", reply);
+            handler(err, reply);
+            break;
+        default:
+            throw new Error("unhandled opCode " + header.opCode);
+        }
+        offs += replyLength;
+
     }
     if (offs < chunk.length) prevChunk = offs ? chunk.slice(offs) : chunk;
+    cb();
 
 /**
     // FIXME: qbuf does not work... ?
@@ -179,27 +226,40 @@ var t1 = fptime(), t2, t3;
 var socket = net.connect({ port: 27017, host: 'localhost' });
 //var socket = net.connect("/tmp/mongodb-27017.sock");  -- gets bad data in response?
 
+var _nQueries = 10000;
+var _nReplies = 0;
+
 socket.on('connect', function() {
 console.log("AR: connect");
     t1 = fptime();
-    for (var i=0; i<4000; i++) socket.write(msg);
+    for (var i=0; i<_nQueries; i++) {
+        var msg = buildQuery('test.test', {}, {}, 0, 1);
+        socket.write(msg);
+    }
     t2 = fptime();
-    console.log("AR: sent 4k queries in %d s", t2 - t1);
+    console.log("AR: built and sent 4k queries in %d s", t2 - t1);
     // can send 200k queries per second (find any limit 1)
+    // can build and send 95k queries per second (4.4.0 could to 110k/s)
     // can receive 115k replies per second (113B single entity)
-    setTimeout(function(){ socket.end() }, 4000);
+    // can build/receive 6500 calls / sec (1 entity, just _id, pipelined)
+    //setTimeout(function(){ socket.end() }, 2000);
     t1 = fptime();
 });
 
 socket.on('data', function(chunk) {
 //console.log("AR: data", t1, t2);
     t2 = fptime();
-console.log("AR: got response in", t2 - t1, "sec");
-//console.log("AR: got chunk", chunk);
+console.log("AR: got response in", t2 - t1, "sec, nb:", chunk.length);
+//console.log("AR: got chunk", chunk /*, chunk.toString()*/, prevChunk);
     t1 = fptime();
     // mongo can send 37.5k 699B responses per second.  Decoding is extra.
 
-    dispatchReplies(chunk);
+//    socket.pause();
+    dispatchReplies(chunk, function(err, reply){ _nReplies += 1 }, function(err, n){
+console.log("AR: got reply, calls/replies", _nQueries, _nReplies);
+//        socket.resume();
+        if (_nReplies === _nQueries) socket.end();
+    });
 });
 socket.on('error', function(err) {
 console.log("AR: error");
