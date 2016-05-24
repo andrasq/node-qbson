@@ -96,6 +96,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     }
 
     socket.on('data', function(chunk) {
+        // gather the data and try to deliver.  mutexing and yielding done by deliverReplies
         qmongo.qbuf.write(chunk);
         deliverRepliesQ(qmongo, qmongo.qbuf, function(err, reply){ qmongo.dispatchReply(err, reply) });
     });
@@ -187,6 +188,11 @@ QMongo.prototype.find = function find( query, options, callback ) {
 
 }
 
+QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
+    if (!callback) { callback = args; args = null; }
+    this.collection('$cmd').find(cmd, {w: 1, limit: 1}, callback);
+}
+
 // compute the hex md5 checksum
 function md5sum( str ) {
     var cksum = crypto.createHash('md5').update(str).digest('hex');
@@ -197,18 +203,19 @@ QMongo.prototype.auth = function auth( username, password, callback ) {
     var self = this;
     self.runCommand({ getnonce: 1}, function(err, ret) {
         if (err) return callback(err);
-        self.runCommand({ authenticate: 1,
+        self.runCommand({
+            authenticate: 1,
             nonce: ret.nonce,
             user: username,
-            key: md5sum(ret.nonce + username + md5sum(username + ":mongo:" + password)) }, callback);
+            key: md5sum(ret.nonce + username + md5sum(username + ":mongo:" + password))
+        },
+        function(err) {
+// FIXME: does not error out on invalid creds?? eg foo@localhost vs @localhost
+            callback(err)
+        });
         // gets "field missing/wrong type in received authenticate command" if no mechanism
         // mechanism PLAIN only in enterprise version
     });
-}
-
-QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
-    if (!callback) { callback = args; args = null; }
-    this.collection('$cmd').find(cmd, {w: 1, limit: 1}, callback);
 }
 
 function decodeDocuments( docs, cb ) {
@@ -290,6 +297,9 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
     return offset+16;
 }
 
+// TODO: make this a method?
+// TODO: deprecate the "callback", is an early scaffolding leftover
+// TODO: deprecate the "handler", is always the same
 // nb: as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
     var handledCount = 0;
@@ -313,6 +323,7 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
         if (len > qbuf.length) break;
 
         // decode to reply header to know what to do with it
+        // even error replies return a header
         var buf = qbuf.read(len);
         var header = decodeHeader(buf, 0);
         if (header.opCode !== OP_REPLY) {
@@ -365,9 +376,7 @@ function decodeReply( buf, base, bound ) {
     var numberFound = 0;
     while (base < bound) {
         var len = getUInt32(buf, base);
-        // return raw items, separate but do not decode the returned documents
-        //var obj = buf.slice(base+4, base+len-1);
-        var obj = buf.slice(base, base+len);    // a complete bson object
+        var obj = buf.slice(base, base+len);    // return complete bson objects
         reply.documents.push(obj);
         base += len;
         numberFound += 1;
