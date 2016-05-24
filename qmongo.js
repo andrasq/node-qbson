@@ -3,13 +3,18 @@
 'use strict';
 
 module.exports = QMongo;
+module.exports.Db = null;               // for db()
+module.exports.Collection = null;       // for collection()
+module.exports.Cursor = null;           // placeholder for find()
 
 
 var net = require('net');
 var crypto = require('crypto');
+
 var QBuffer = require('qbuffer');
 var utf8 = require('./utf8');
 var qbson = require('./qbson');
+
 var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
 var getBsonEntities = qbson.decode.getBsonEntities;     // bson_decode of mongodump concat data
@@ -21,9 +26,8 @@ function QMongo( socket, options ) {
     this.collectionName = options.collection || 'test';
     this.socket = socket;
     this.callbacks = new Object();
-    this.batchSize = options.batchSize || 200;
+    this.batchSize = options.batchSize || 400;
     this.qbuf = new QBuffer({ encoding: null });
-    this.dispatchLimit = options.dispatchLimit || 999999999;
     this._closed = false;
     this._dispatchRunning = false;
 }
@@ -96,7 +100,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     }
 
     socket.on('data', function(chunk) {
-        // gather the data and try to deliver.  mutexing and yielding done by deliverReplies
+        // gather the data and try to deliver.  mutexes and pacing in the delivery func
         qmongo.qbuf.write(chunk);
         deliverRepliesQ(qmongo, qmongo.qbuf, function(err, reply){ qmongo.dispatchReply(err, reply) });
     });
@@ -164,28 +168,31 @@ QMongo.prototype.collection = function collection( collectionName, callback ) {
 };
 
 QMongo.prototype.find = function find( query, options, callback ) {
-    if (!callback) { callback = options; options = {}; }
+    if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (this._closed) return callback(new Error("connection closed"));
     if (!this.socket) return callback(new Error("not connected"));
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
 
     var ns = this.dbName + '.' + this.collectionName;
     var id = _getRequestId();
-    var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || this.batchSize);
-    this.callbacks[id] = {
+    var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
+    var cbInfo = this.callbacks[id] = {
         cb: callback,
         tm: Date.now(),
         raw: options.raw,
     }
-// FIXME: store the callback and whether raw or converted, and time when queued for timeout handling
     this.socket.write(queryBuf);
 
-    // TODO: no cursor, automatic toArray() of the batch
-    // to stream lots of data, batch by finding {_id: {$gt: undefined}} then $gt: very last _id.
-    // FIXME: need a cursor to stream the results of a complex sort (ie, not a single key)
+    // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
+    // For now, batch large datasets explicitly.
 
-// FIXME: for compat, should return an object with a toArray() method
-
+    // return an object with a toArray() method, for compatibility
+    // TODO: return a proper cursor that can also nextObject() and/or emit objects
+    return {
+        toArray: function(callback) {
+            cbInfo.cb = callback;
+        },
+    };
 }
 
 QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
@@ -303,7 +310,7 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 // nb: as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
     var handledCount = 0;
-    var limit = qmongo.dispatchLimit || 999999999;
+    var limit = 2;                              // how many replies to process before yielding the cpu
 
     if (qmongo._dispatchRunning) return callback ? callback(null, 0) : undefined;
     if (qbuf.length < 4) return callback ? callback(null, 0) : undefined;
@@ -314,7 +321,6 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
     // TODO: create qbuf api to peek at bytes without having to slice ... maybe qbuf.getInt(pos) ?
     while (qbuf.length >= 36 && (len = getUInt32(qbuf.peek(4), 0)) <= qbuf.length) {
         // stop if limit reached
-        if (handledCount >= limit) break;
 
         // stop if next response is not fully arrived
         // TODO: add a readInt32LE() method on qbuf to not have to slice
@@ -322,12 +328,18 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
         len = getUInt32(qbuf.peek(4), 0);
         if (len > qbuf.length) break;
 
+        // yield to the event loop after limit replies, schedule the remaining work
+        if (handledCount >= limit) {
+            setImmediate(function(){ deliverRepliesQ(qmongo, qbuf, handler, callback) });
+            break;
+        }
+
         // decode to reply header to know what to do with it
         // even error replies return a header
         var buf = qbuf.read(len);
         var header = decodeHeader(buf, 0);
         if (header.opCode !== OP_REPLY) {
-            // FIXME: handle this better
+            // TODO: handle this better
             console.log("qmongo: not a reply, skipping opCode " + header.opCode);
             continue;
         }
@@ -339,9 +351,12 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
             // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
             reply.error = qbson.decode(reply.documents[0]);
             reply.documents = [];
+            // MongoError comes from query failures and bad bson
             err = new MongoError();
             for (var k in reply.error) err[k] = reply.error[k];
         }
+
+        // dispatch reply to its callback
         handler(err, reply);
 
         handledCount += 1;
@@ -349,6 +364,7 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
     qmongo._dispatchRunning = false;
     return callback ? callback(err, handledCount) : undefined;
 }
+
 
 function decodeHeader( buf, offset ) {
     return {
@@ -360,6 +376,8 @@ function decodeHeader( buf, offset ) {
 }
 
 function decodeReply( buf, base, bound ) {
+// TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
+// TODO: decode to object here? (to recycle buffers sooner)
     var reply = {
         // TODO: flatten header fields into reply
         header: null, // filled in by caller who already parsed it to know to call us
@@ -383,7 +401,8 @@ function decodeReply( buf, base, bound ) {
     }
     if (base !== bound) {
         // FIXME: clean up without killing self.
-        console.log("incomplete entity, header:", decodeHeader(buf, base), reply.responseFlags.toString(16), buf.strings(base), buf.slice(base-30), reply.error);
+        console.log("qmongo: incomplete entity, header:", decodeHeader(buf, base), "flags:", reply.responseFlags.toString(16),
+            "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
         throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
     }
     if (numberFound !== reply.numberReturned) {
@@ -398,28 +417,35 @@ function decodeReply( buf, base, bound ) {
 // quicktest:
 if (process.env['NODE_TEST'] === 'qmongo') {
 
-var QMongo = require('mongodb').MongoClient;
+var assert = require('assert');
 
-QMongo.connect("mongodb://@localhost/", function(err, db) {
+var mongo = QMongo;
+//var mongo = require('mongodb').MongoClient;
+
+mongo.connect("mongodb://@localhost/", function(err, db) {
     if (err) throw err;
     var n = 0;
     var t1 = Date.now();
     var nloops = 500;
     var limit = 200;
     var expect = nloops * limit;
-    var options = { limit: limit, raw: false };
-    for (var i=0; i<nloops; i++)
-    //db.db('kinvey').collection('kdsdir').find({}, options, function(err, docs) {
+    var options = { limit: limit, raw: true };
+
+    console.log("AR:", process.memoryUsage());
+    var t1 = Date.now();
+  for (var i=0; i<nloops; i++)
     db.db('kinvey').collection('kdsdir').find({}, options).toArray(function(err, docs) {
         if (err) throw err;
-        if (!docs[0]._id && !Buffer.isBuffer(docs[0])) throw new Error("missing id");
+        assert(docs[0]._id || Buffer.isBuffer(docs[0]) || console.log(docs[0]));
         n += docs.length;
         if (n >= expect) {
             var t2 = Date.now();
             console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
+            console.log("AR:", process.memoryUsage());
             db.close();
-            // 1.2m/s raw 200@, 128k/s decoded
-            // mongodb: 
+            console.log("AR:", process.memoryUsage());
+            // 1.2m/s raw 200@, 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
+            // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
         }
     })
 });
