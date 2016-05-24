@@ -146,8 +146,9 @@ function Long( lowWord, highWord ) {
     // TODO: init from bytes? eg (buf, base)
 }
 
-// DbRef is a weird internal mongodb creature, deprecated.
-function DbRef( name, id ) {
+// DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
+function DbRef( name, oid ) {
+    this.DbRef = 1;
     this.name = name;
-    this.id = id;
+    this.oid = oid;
 }

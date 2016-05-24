@@ -23,6 +23,7 @@ var Timestamp = bsonTypes.Timestamp;
 var MinKey = bsonTypes.MinKey;
 var MaxKey = bsonTypes.MaxKey;
 var Long = bsonTypes.Long;
+var DbRef = bsonTypes.DbRef;
 
 function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
@@ -115,7 +116,11 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
         case 127:
             value = new MaxKey();
             break;
-        case 12:        // stringZ name, 12B ref
+        case 12:
+            base = scanStringZ(buf, base, s0);
+            value = new DbRef(s0.val, new ObjectId().setFromBuffer(buf, base));
+            base += 12;
+            break;
         default:
             throw new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + start);
             break;

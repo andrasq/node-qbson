@@ -139,10 +139,11 @@ function guessVariableSize( id, value ) {
     case T_BINARY_0: return 5 + value.length;
     case T_TIMESTAMP: return 8;
     case T_LONG: return 8;
-    case T_DBREF:
+    case T_DBREF: return 3 * value.name + 1 + 12;
+    case T_MINKEY: return 0;
+    case T_MAXKEY: return 0;
+
     case T_SCOPED_FUNCTION:
-    case T_MINKEY:
-    case T_MAXKEY:
     default: throw new Error("unknown size of " + (typeof value));
     }
 }
