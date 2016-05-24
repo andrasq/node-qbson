@@ -11,6 +11,7 @@ var qbson = require('./qbson');
 var utf8 = require('./utf8');
 var QBuffer = require('qbuffer');
 var util = require('util');
+var BSON = require('bson').BSONPure.BSON;
 
 function MongoError(){ Error.call(this); }
 util.inherits(MongoError, Error);
@@ -86,7 +87,46 @@ struct OP_REPLY {
 var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
 
+// write a vector of values to the buffer.  Values are interleaved as [0] = type, [1] = value.
+function pack( buf, offset, typeVals ) {
+    for (var i=0; i<typeVals.length; i+=2) {
+        switch (typeVals[i]) {
+        case 'i':  // int32
+            offset = putInt32(buf, typeVals[i+1]);
+            break;
+        case 'cs':  // cstring
+            offset = utf8.encodeUtf8Overlong(typeVals[i+1], 0, typeVals[i+1].length, buf, offset);
+            buf[offset++] = 0;
+            break;
+        }
+    }
+    return offset;
+}
+
+// maybe:
+function unpack( buf, base, target, typeNames ) {
+    for (var i=0; i<typeNames.length; i+=2) {
+        switch (types[i]) {
+        case 'i':
+            target[typeNames[i+1]] = getUInt32(buf, base);
+            base += 4;
+            break;
+        case 'u':
+            target[typeNames[i+1]] = getUInt32(buf, base) << 0;
+            base += 4;
+            break;
+        case 'l':
+            target[typeNames[i+1]] = new qbson.Long(getUInt32(buf, base), getUInt32(buf, base+4));
+            base += 8;
+            break;
+        }
+    }
+    return base;
+}
+
 function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
+//    return pack(buf, offset, ['i', length, 'i', reqId, 'i', respTo, 'i', opCode]);
+
     putInt32(length, buf, offset+0);
     putInt32(reqId, buf, offset+4);
     // respTo is db-side only, but if not set mongo does not reply?
@@ -107,7 +147,7 @@ function decodeHeader( buf, offset ) {
 function decodeReply( buf, base, bound ) {
     var reply = {
         // TODO: flatten header fields into reply
-        header: null, // caller already has the header
+        header: null, // filled in by caller who already parsed it to know to call us
         responseFlags: getUInt32(buf, base+16),
         cursorId: new qbson.Long(getUInt32(buf, base+20), getUInt32(buf, base+24)),
         startingFrom: getUInt32(buf, base+28),
@@ -122,7 +162,8 @@ function decodeReply( buf, base, bound ) {
     while (base < bound) {
         var len = getUInt32(buf, base);
         // return raw items, separate but do not decode the returned documents
-        var obj = buf.slice(base+4, base+len-1);
+        //var obj = buf.slice(base+4, base+len-1);
+        var obj = buf.slice(base, base+len);    // a complete bson object
         reply.documents.push(obj);
         base += len;
         numberFound += 1;
@@ -201,7 +242,7 @@ function handleReplies( chunk, handler, cb ) {
             var err = null;
             if (reply.responseFlags & 2) {
                 // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
-                reply.error = qbson.decode.getBsonEntities(reply.documents[0], 0, reply.documents[0].length, {})
+                reply.error = qbson.decode(reply.documents[0]);
                 err = new MongoError();
                 for (var k in reply.error) err[k] = reply.error[k];
             }
@@ -240,15 +281,17 @@ function handleRepliesQ( qbuf, limit, handler, callback ) {
             var err = null;
             if (reply.responseFlags & FL_R_QUERY_FAILURE) {
                 // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
-                reply.error = qbson.decode.getBsonEntities(reply.documents[0], 0, reply.documents[0].length, {})
+                reply.error = qbson.decode(reply.documents[0]);
                 err = new MongoError();
                 for (var k in reply.error) err[k] = reply.error[k];
             }
 // ... is 3% *faster* to decode all replies to objects?? ... cache effects, or real? (less time, higher cpu% - buf malloc?)
-for (var i=0; i<reply.documents.length; i++) {
+if (1) for (var i=0; i<reply.documents.length; i++) {
     var doc = reply.documents[i];
-    reply.documents[i] = qbson.decode.getBsonEntities(doc, 0, doc.length, new Object());
+    reply.documents[i] = qbson.decode(doc);
+    //reply.documents[i] = BSON.deserialize(doc);
 }
+//console.log(reply.documents.length, reply.documents[0]);
             handler(err, reply);
         }
         handledCount += 1;
@@ -268,18 +311,19 @@ Buffer.prototype.strings = function(base, bound) {
     }
     return s;
 }
-var t1 = fptime(), t2, t3;
+var t0, t1 = fptime(), t2, t3;
 var socket = net.connect({ port: 27017, host: 'localhost' });
 //var socket = net.connect("/tmp/mongodb-27017.sock");  -- gets bad data in response?
 
-var _nQueries = 100000;
+var _nQueries = 5000;
 var _nReplies = 0;
+// note: good batch size (for kdsdir) is 200
 
 socket.on('connect', function() {
 console.log("AR: connect");
-    t1 = fptime();
+    t0 = t1 = fptime();
     for (var i=0; i<_nQueries; i++) {
-        var msg = buildQuery('test.test', {}, null/*{_id: 1, a:1, b:1, x:1}*/, 0, 1);
+        var msg = buildQuery('kinvey.kdsdir', {}, null/*{_id:1}*/, 0, 200);
         socket.write(msg);
     }
     t2 = fptime();
@@ -287,8 +331,12 @@ console.log("AR: connect");
     // can send 200k queries per second (find any limit 1)
     // can build and send 95k queries per second (4.4.0 could to 110k/s)
     // can receive 115k replies per second (113B single entity)
-    // can build/receive 38k calls / sec (pipelined, 1 entity all fields; 30k/s 4 fields: if all fields, fields obj not serialized!)
+    // can build/receive 41k calls / sec (pipelined, 1 entity all fields; 30k/s 4 fields: if all fields, fields obj not serialized!)
+    // (the bottleneck is on the mongo side, to do the field matching?  23% faster to retrieve all fields than just _id!)
     //setTimeout(function(){ socket.end() }, 2000);
+    // fetches over 300k kdsdir records / sec 3 fields, 132k/s all fields, 570k/s just _id (all these fully decoded!)
+    // fetches 875k/s 50@ kdsdir records all fields as bson (not decoded) -- ie not decoding is 6.5x faster to move data
+    // fetch 1.15m/s 10k@ kdsdir records all fields as bson (but only 94k/s 10k@ decoded... 12x faster! BUT: 131k/s 1k@, 130k/s 200@, 126k/s @100)
     t1 = fptime();
 });
 
@@ -308,11 +356,15 @@ socket.on('data', function(chunk) {
 
     qbuf.write(chunk);
     handleRepliesQ(qbuf, 1000000, dispatchReply, function(err, n) {
-        if (_nReplies === _nQueries) socket.end();
+        if (_nReplies === _nQueries) {
+            t3 = fptime();
+            console.log("AR: handled %d queries in %d s", _nQueries, t3 - t0);
+            socket.end();
+        }
     });
 });
 
 socket.on('error', function(err) {
-console.log("AR: error");
+    // FIXME: error out all queries waiting for a response from this socket
     console.log("AR: socket error", err);
 });
