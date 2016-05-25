@@ -14,6 +14,16 @@ much faster, 2x to 6x faster on primitives and as much as 12x faster on compound
 data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.  Timings with
 node-v0.10.42 are remarkably different, so beware your node version.
 
+Manifest
+--------
+
+- `decode.js` - faster BSON deserializer (complete)
+- `encode.js` - very fast BSON serializer (mostly complete)
+- `object-id.js` - very fast mongo ObjectId() construction and conversion
+- `utf8.js` - UTF-8 string encoding and decoding, sometimes duplicating parts of `buffer` and `string_decoder`
+- `json-decoder` - wanted just JSON concatenation, but turned into a full work-alike of `require('string_decoder')`
+- `qmongo.js` - very simple nodejs mongo client made to resemble `mongodb`
+
 encode
 ------
 
@@ -91,6 +101,7 @@ Examines the string, does not use `Buffer.byteLength`.
 Change Log
 ----------
 
+- 0.0.6 - decode complete, qmongo working
 - 0.0.5 - more timings, encode functions and symbols, json-decoder, encodeJson, ObjectId
 - 0.0.4 - utf8 functions complete and fully under test
 - 0.0.3 - cleanups, refactored, timings
