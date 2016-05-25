@@ -3,9 +3,9 @@
 'use strict';
 
 module.exports = QMongo;
-module.exports.Db = null;               // for db()
-module.exports.Collection = null;       // for collection()
-module.exports.Cursor = null;           // placeholder for find()
+module.exports.Db = Db;                         // type returned by qmongo.db()
+module.exports.Collection = Collection;         // type returned by qmongo.db().collection()
+module.exports.Cursor = null;                   // placeholder for find()
 
 
 var net = require('net');
@@ -154,31 +154,48 @@ QMongo.prototype.close = function close( ) {
 };
 
 QMongo.prototype.db = function db( dbName ) {
-    this.dbName = dbName;
-    return this;
-    // FIXME: must return a new object that points to the socket, to allow
-    // eg dbA = m.db(a); dbB = m.db(b)
+    return new Db(this, dbName);
 }
 
-QMongo.prototype.collection = function collection( collectionName, callback ) {
-    this.collectionName = collectionName;
-    return callback ? callback(null, this) : this;
-    // FIXME: must return a new object that points to the db, to allow
-    // eg: coA = db.collection(a); coB = db.collection(b)
-};
+function Db( qmongo, dbName ) {
+    this.qmongo = qmongo;
+    this.dbName = dbName;
+}
+Db.prototype.collection = function collection( collectionName, callback ) {
+    var coll = new Collection(this.qmongo, this.dbName, collectionName);
+    return (callback) ? callback(null, coll) : coll;
+}
+Db.prototype = Db.prototype;
 
-QMongo.prototype.find = function find( query, options, callback ) {
+function Collection( qmongo, dbName, collectionName ) {
+    this.qmongo = qmongo;
+    this.dbName = dbName;
+    this.collectionName = collectionName;
+}
+Collection.prototype.runCommand = function runCommand( cmd, args, callback ) {
+    return this.qmongo.runCommand(cmd, args, callback);
+}
+Collection.prototype.find = function find( query, options, callback ) {
+    var _ns = this.dbName + '.' + this.collectionName;          // namespace to use
+    return this.qmongo.find(query, options, callback, _ns);     // and have qmongo make the call
+}
+Collection.prototype = Collection.prototype;
+
+
+
+QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (this._closed) return callback(new Error("connection closed"));
     if (!this.socket) return callback(new Error("not connected"));
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
 
-    var ns = this.dbName + '.' + this.collectionName;
+    var ns = _ns || this.dbName + '.' + this.collectionName;
     var id = _getRequestId();
     if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
     var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
 
-    // start the query on its way, data is only sent we install the callback handler below
+    // start the query on its way
+    // data is actually transmitted only after we already installed the callback handler
     this.socket.write(queryBuf);
 
     // then install the callback handler and return a cursor that can act on the returned data
@@ -198,7 +215,11 @@ function QueryReply( cbInfo ) {
 }
 QueryReply.prototype.toArray = function toArray( callback ) {
     this.cbInfo.cb = callback;
-};
+}
+QueryReply.prototype.batchSize = function batchSize( length ) {
+    // TODO: later
+    return this;
+}
 QueryReply.prototype = QueryReply.prototype;
 
 QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
@@ -434,7 +455,7 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
             console.log("AR:", process.memoryUsage());
             db.close();
             console.log("AR:", process.memoryUsage());
-            // 1.2m/s raw 200@, 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
+            // 1.2m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
             // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
         }
     })
