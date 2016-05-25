@@ -284,7 +284,7 @@ function buildQuery( reqId, ns, query, fields, skip, limit ) {
     // TODO: keep buffers of the common sizes on free lists
     var szQuery = qbson.encode.guessSize(query);
     var szFields = qbson.encode.guessSize(fields);
-    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1;
+    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;;
     // normalize query sizes for easier reuse (TODO: maintain own free list)
     if (bufSize < 1000) bufSize = 1000;
     var msg = new Buffer(bufSize);
