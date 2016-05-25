@@ -102,7 +102,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     socket.on('data', function(chunk) {
         // gather the data and try to deliver.  mutexes and pacing in the delivery func
         qmongo.qbuf.write(chunk);
-        deliverRepliesQ(qmongo, qmongo.qbuf, function(err, reply){ qmongo.dispatchReply(err, reply) });
+        deliverRepliesQ(qmongo, qmongo.qbuf);
     });
 
     // catch socket errors else eg ECONNREFUSED is fatal
@@ -231,28 +231,6 @@ QMongo.prototype.auth = function auth( username, password, callback ) {
     });
 }
 
-function decodeDocuments( docs, cb ) {
-    try {
-        for (var i=0; i<docs.length; i++) docs[i] = qbson.decode(docs[i]);
-        return cb(null, docs);
-    }
-    catch (err) { return cb(err) }
-}
-
-QMongo.prototype.dispatchReply = function dispatchReply( err, reply ) {
-    // note that even error replies return a parsed header
-    var cb = this.callbacks[reply.header.responseTo];
-    delete this.callbacks[reply.header.responseTo];
-    if (!cb) {
-        console.log("qmongo: not ours, ignoring responseTo %d", reply.header.responseTo);
-        return;
-    }
-    this._responseCount += 1;
-
-    if (err || cb.raw || !reply.documents) return cb.cb(err, reply.documents);
-    else return decodeDocuments(reply.documents, cb.cb);
-}
-
 // speed up access
 QMongo.prototype = QMongo.prototype;
 
@@ -311,15 +289,13 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 }
 
 // TODO: make this a method?
-// TODO: deprecate the "callback", is an early scaffolding leftover
-// TODO: deprecate the "handler", is always the same
 // nb: as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
-function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
+function deliverRepliesQ( qmongo, qbuf ) {
     var handledCount = 0;
     var limit = 2;                              // how many replies to process before yielding the cpu
 
-    if (qmongo._dispatchRunning) return callback ? callback(null, 0) : undefined;
-    if (qbuf.length < 4) return callback ? callback(null, 0) : undefined;
+    if (qmongo._dispatchRunning) return;
+    if (qbuf.length < 4) return;
 
     qmongo._dispatchRunning = true;
 
@@ -334,9 +310,9 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
         len = getUInt32(qbuf.peek(4), 0);
         if (len > qbuf.length) break;
 
-        // yield to the event loop after limit replies, schedule the remaining work
+        // yield to the event loop after limit replies, and schedule the remaining work
         if (handledCount >= limit) {
-            setImmediate(function(){ deliverRepliesQ(qmongo, qbuf, handler, callback) });
+            setImmediate(function(){ deliverRepliesQ(qmongo, qbuf) });
             break;
         }
 
@@ -350,7 +326,14 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
             continue;
         }
 
-        var reply = decodeReply(buf, 0, buf.length);
+        // find the callback that gets this reply
+        var cbInfo = qmongo.callbacks[header.responseTo];
+        if (!cbInfo) {
+            console.log("qmongo: reply not ours, ignoring responseTo %d", reply.header.responseTo, cbInfo);
+            continue;
+        }
+
+        var reply = decodeReply(buf, 0, buf.length, cbInfo.raw);
         reply.header = header;
         var err = null;
         if (reply.responseFlags & FL_R_QUERY_FAILURE) {
@@ -363,12 +346,12 @@ function deliverRepliesQ( qmongo, qbuf, handler, callback ) {
         }
 
         // dispatch reply to its callback
-        handler(err, reply);
+        qmongo._responseCount += 1;
+        cbInfo.cb(err, reply.documents);
 
         handledCount += 1;
     }
     qmongo._dispatchRunning = false;
-    return callback ? callback(err, handledCount) : undefined;
 }
 
 
@@ -381,7 +364,7 @@ function decodeHeader( buf, offset ) {
     };
 }
 
-function decodeReply( buf, base, bound ) {
+function decodeReply( buf, base, bound, raw ) {
 // TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
 // TODO: decode to object here? (to recycle buffers sooner)
     var reply = {
@@ -401,6 +384,7 @@ function decodeReply( buf, base, bound ) {
     while (base < bound) {
         var len = getUInt32(buf, base);
         var obj = buf.slice(base, base+len);    // return complete bson objects
+        if (!raw) obj = qbson.decode(obj);
         reply.documents.push(obj);
         base += len;
         numberFound += 1;
