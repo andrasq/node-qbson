@@ -175,25 +175,31 @@ QMongo.prototype.find = function find( query, options, callback ) {
 
     var ns = this.dbName + '.' + this.collectionName;
     var id = _getRequestId();
+    if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
     var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
-    var cbInfo = this.callbacks[id] = {
+
+    // start the query on its way, data is only sent we install the callback handler below
+    this.socket.write(queryBuf);
+
+    // then install the callback handler and return a cursor that can act on the returned data
+    // TODO: this works for toArray, but must rework for nextObject()
+    return new QueryReply(this.callbacks[id] = {
         cb: callback,
         tm: Date.now(),
         raw: options.raw,
-    }
-    this.socket.write(queryBuf);
+    });
 
     // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
     // For now, batch large datasets explicitly.
-
-    // return an object with a toArray() method, for compatibility
-    // TODO: return a proper cursor that can also nextObject() and/or emit objects
-    return {
-        toArray: function(callback) {
-            cbInfo.cb = callback;
-        },
-    };
 }
+
+function QueryReply( cbInfo ) {
+    this.cbInfo = cbInfo;
+}
+QueryReply.prototype.toArray = function toArray( callback ) {
+    this.cbInfo.cb = callback;
+};
+QueryReply.prototype = QueryReply.prototype;
 
 QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
     if (!callback) { callback = args; args = null; }
@@ -426,7 +432,7 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     if (err) throw err;
     var n = 0;
     var t1 = Date.now();
-    var nloops = 500;
+    var nloops = 5000;
     var limit = 200;
     var expect = nloops * limit;
     var options = { limit: limit, raw: true };
