@@ -9,6 +9,7 @@ module.exports.Cursor = null;                   // placeholder for find()
 
 
 var net = require('net');
+var util = require('util');
 var crypto = require('crypto');
 
 var QBuffer = require('qbuffer');
@@ -45,6 +46,12 @@ var OP_DELETE = 2006;           // Delete documents.
 var OP_KILL_CURSORS = 2007;     // Notify database that the client has finished with the cursor.
 
 var FL_R_QUERY_FAILURE = 2;     // QueryFailure response flag
+
+
+function MongoError(){
+    Error.call(this);
+}
+util.inherits(MongoError, Error);
 
 
 // mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
