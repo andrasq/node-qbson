@@ -199,11 +199,10 @@ QMongo.prototype.altFind = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (!callback) throw new Error("callback required");
     var cbInfo = {
-        //id: 0,                  // request id, filled in when sent
+        id: 0,                  // request id, filled in when sent
         tm: 0,                  // request timestamp, filled in when sent
         cb: callback,           // who to notify
         raw: options.raw,       // how to decode the reply
-        _done: false,           // can cbInfo be disposed of
     };
     this.queryQueue.push({
         query: query,
@@ -232,7 +231,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
         cbInfo.tm = Date.now();
 
         // TODO: rename callbacks -> cbMap
-        if (this.callbacks[id] && !this.callbacks[id]._done) throw new Error("qmongo: assertion error: duplicate requestId " + id);
+        if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
 
         // TODO: impose a low default limit unless higher is specified
         // TODO: buildQuery could take the cbInfo object instead of the parts
@@ -258,7 +257,7 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 // TODO: put all queries on the schedule queue (qlist), then this.schedule() to launch them
 
     var id = _getRequestId();
-    if (this.callbacks[id] && !this.callbacks[id]._done) throw new Error("qmongo: assertion error: duplicate requestId " + id);
+    if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
     var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
 
     // start the query on its way
@@ -422,7 +421,8 @@ function deliverRepliesQ( qmongo, qbuf ) {
 
         // find the callback that gets this reply
         var cbInfo = qmongo.callbacks[header.responseTo];
-        if (!cbInfo) {
+        if (cbInfo) qmongo.callbacks[header.responseTo] = 0;
+        else {
             console.log("qmongo: not ours, ignoring reply to %d", header.responseTo, cbInfo);
             continue;
         }
@@ -442,7 +442,6 @@ function deliverRepliesQ( qmongo, qbuf ) {
         // dispatch reply to its callback
         cbInfo.cb(err, reply.documents);
         qmongo._responseCount += 1;
-        cbInfo._done = 1;
         handledCount += 1;
 
         // every 8k replies compact the callbacks object (adds 4% overhead, but needed to free mem)
@@ -458,12 +457,14 @@ function deliverRepliesQ( qmongo, qbuf ) {
 
 function compactCbMap( qmongo ) {
     var cbMap2 = new Object(), cbList2 = new Array();
-    var cbList = qmongo.cbList;
+    var cbMap = qmongo.callbacks, cbList = qmongo.cbList;
 
+    var item;
     for (var i=0; i<cbList.length; i++) {
-        if (!cbList[i]._done) {
-            cbMap2[cbList[i].id] = cbList[i];
-            cbList2.push(cbList[i]);
+        item = cbList[i];
+        if (cbMap[item.id]) {
+            cbMap2[item.id] = item;
+            cbList2.push(item);
         }
     }
     qmongo.callbacks = cbMap2;
@@ -535,14 +536,14 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     // caution: 1e6 pending calls crashed my mongod!
     var limit = 200;
     var expect = nloops * limit;
-    var options = { limit: limit, raw: true };
+    var options = { limit: limit, raw: 1 };
 
     console.log("AR:", process.memoryUsage());
     var t1 = Date.now();
   for (var i=0; i<nloops; i++)
     db.db('kinvey').collection('kdsdir').find({}, options).toArray(function(err, docs) {
         if (err) { console.log("AR: find error", err); throw err; }
-        assert(docs[0]._id || Buffer.isBuffer(docs[0]) || console.log(docs[0]));
+        assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
         n += docs.length;
         if (n >= expect) {
             var t2 = Date.now();
@@ -553,6 +554,7 @@ console.log("AR:", process.memoryUsage());
 //console.log("AR:", db);
             // 1.2m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
             // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
+            // 1m 20000@: 10.6 sec qmongo vs 11.1 sec mongodb (??) (but 5x smaller rss)
         }
     })
 });
