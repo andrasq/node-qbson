@@ -6,6 +6,7 @@ module.exports = QMongo;
 module.exports.Db = Db;                         // type returned by qmongo.db()
 module.exports.Collection = Collection;         // type returned by qmongo.db().collection()
 module.exports.Cursor = null;                   // placeholder for find()
+module.exports.MongoError = MongoError;
 
 
 var net = require('net');
@@ -22,22 +23,39 @@ var getUInt32 = qbson.decode.getUInt32;
 var getBsonEntities = qbson.decode.getBsonEntities;     // bson_decode of mongodump concat data
 var encodeEntities = qbson.encode.encodeEntities;       // bson_encode into buffer
 
+/*
+ * the q mongo client.  It can make queries itself, or return db and
+ * collection objects that embed different db and collection names.
+ * All returned objects use the same underlying qm client to talk to mongo.
+ */
 function QMongo( socket, options ) {
     if (!options) options = {};
-    this.dbName = options.database || 'test';
-    this.collectionName = options.collection || 'test';
+
     this.socket = socket;
+    this.qbuf = new QBuffer({ encoding: null });
+
+    this.queryQueue = new QList();
     this.callbacks = new Object();
     this.sentIds = new Array();
+
+    this.dbName = options.database || 'test';
+    this.collectionName = options.collection || 'test';
     this.batchSize = options.batchSize || 400;
-    this.qbuf = new QBuffer({ encoding: null });
     this._closed = false;
-    this._dispatchRunning = false;
+    this._deliverRunning = false;
     this._runningCallsCount = 0;
     this._responseCount = 0;
-    this.queryQueue = new QList();
 }
 
+// same as qm.db(dbName).collection(collectionName), but sets the qm object itself
+// dbName is optional.
+QMongo.prototype.useCollection = function useCollection( dbName, collectionName ) {
+    if (!collectionName) { collectionName = dbName; dbName = this.dbName; }
+    if (!dbName || !collectionName) throw new Error("dbName and collectionName required");
+    this.dbName = dbName;
+    this.collectionName = collectionName;
+    return this;
+}
 
 // request opCodes from https://docs.mongodb.com/v3.0/reference/mongodb-wire-protocol/
 var OP_REPLY = 1;               // Reply to a client request. responseTo is set.
@@ -50,8 +68,21 @@ var OP_GET_MORE = 2005;         // Get more data from a query. See Cursors.
 var OP_DELETE = 2006;           // Delete documents.
 var OP_KILL_CURSORS = 2007;     // Notify database that the client has finished with the cursor.
 
-var FL_R_QUERY_FAILURE = 2;     // QueryFailure response flag
+// query flags
+var FL_Q_RESERVED = 1;          // must be 0
+var FL_Q_TAILABLE_CURSOR = 2;
+var FL_Q_SLAVE_OK = 4;
+var FL_Q_OPLOG_REPLAY = 8;      // internal
+var FL_Q_NO_CURSOR_TIMEOUT = 16;
+var FL_Q_AWAIT_DATA = 32;       // pump data in multiple "more" replies.  client must then close connection.
+var FL_Q_EXHAUST = 64;
+var FL_Q_PARTIAL = 128;
 
+// response flags
+var FL_R_CURSOR_NOT_FOUND = 1;
+var FL_R_QUERY_FAILURE = 2;     // QueryFailure response flag
+var FL_R_SHARD_CONFIG_STALE = 4; // internal
+var FL_R_AWAIT_CAPABLE = 8;     // always set mongo v1.6 and above
 
 function MongoError(){
     Error.call(this);
@@ -90,7 +121,9 @@ QMongo.connect = function connect( url, options, callback ) {
 
     QMongo._reconnect(new QMongo(), options, callback);
 };
+// TODO: emit events? esp 'error', maybe 'disconnect'
 
+// TODO: move into wire.js
 QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     if (qmongo._closed) return callback(new Error("connection closed"));
     var socket, returned;
@@ -231,6 +264,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
         putInt32(id, qInfo.bson, 4);
 
         // TODO: rename callbacks -> cbMap
+        // FIXME: do not kill self, emit error
         if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
 
         // send the query on its way
@@ -240,37 +274,8 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
         this.callbacks[id] = qInfo;
         this.sentIds.push(id);
         this._runningCallsCount += 1;
+        // TODO: should try to yield between passes to interleave with replies
     }
-}
-
-QMongo.prototype.old_find = function find( query, options, callback, _ns ) {
-    if (!callback && typeof options === 'function') { callback = options; options = {}; }
-    if (this._closed) return callback(new Error("connection closed"));
-    if (!this.socket) return callback(new Error("not connected"));
-    if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
-
-    var ns = _ns || this.dbName + '.' + this.collectionName;
-
-    var id = _makeRequestId();
-    if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
-    var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
-
-    // start the query on its way
-    // data is actually transmitted only after we already installed the callback handler
-    this.socket.write(queryBuf);
-    this.sentIds.push(id);
-
-    // then install the callback handler and return a cursor that can act on the returned data
-    // TODO: this works for toArray, but must rework for nextObject()
-    var qInfo;
-    qInfo = {
-        cb: callback,
-        raw: options.raw
-    };
-    return new QueryReply(this.callbacks[id] = qInfo);
-
-    // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
-    // For now, batch large datasets explicitly.
 }
 
 function QueryReply( qInfo ) {
@@ -368,66 +373,72 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 }
 
 // TODO: make this a method?
-// nb: as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
+// nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 function deliverRepliesQ( qmongo, qbuf ) {
     var handledCount = 0;
     var limit = 4;                              // how many replies to process before yielding the cpu
 
-    if (qmongo._dispatchRunning) return;
+    if (qmongo._deliverRunning) return;
     if (qbuf.length < 4) return;
 
-    qmongo._dispatchRunning = true;
+    qmongo._deliverRunning = true;
 
     var len;
-    // TODO: create qbuf api to peek at bytes without having to slice ... maybe qbuf.getInt(pos) ?
-    while (qbuf.length >= 36 && (len = getUInt32(qbuf.peek(4), 0)) <= qbuf.length) {
-        // stop if next response is not fully arrived
-        // TODO: add a readInt32LE() method on qbuf to not have to slice
-        if (qbuf.length <= 4) break;
-        len = getUInt32(qbuf.peek(4), 0);
-        if (len > qbuf.length) break;
-
+    for (;;) {
         // yield to the event loop after limit replies, and schedule the remaining work
         if (handledCount >= limit) {
             setImmediate(function(){ deliverRepliesQ(qmongo, qbuf) });
             break;
         }
 
-        // decode to reply header to know what to do with it
-        // even error replies return a header
+        // stop if next response is not fully arrived
+        if (qbuf.length <= 4) break;
+        // TODO: add a readInt32LE() method on qbuf to not have to slice (peek slices)
+        len = getUInt32(qbuf.peek(4), 0);
+        if (len > qbuf.length) break;
+
+        // decode the reply header to know what we got
         var buf = qbuf.read(len);
         var header = decodeHeader(buf, 0);
         if (header.opCode !== OP_REPLY) {
-            // TODO: handle this better
-            console.log("qmongo: not a reply, skipping opCode " + header.opCode);
+            // TODO: handle this better, maybe emit 'warning'
+            console.log("qmongo: not a reply, skipping unexpected opCode " + header.opCode);
             continue;
         }
 
-        // find the callback that gets this reply
+        // find the callback that gets this reply.  Need to know if to decode `raw`
         var qInfo = qmongo.callbacks[header.responseTo];
         if (qInfo) qmongo.callbacks[header.responseTo] = 0;
         else {
+            // TODO: handle this better, maybe emit 'warning'
             console.log("qmongo: not ours, ignoring reply to %d", header.responseTo, qInfo);
             continue;
         }
 
-        var reply = decodeReply(buf, 0, buf.length, qInfo.raw);
-        //reply.header = header;
+        // decode the reply itself, retrieve and decode the returned documents
+        var reply = decodeReply(buf, 16, buf.length, qInfo.raw);
         var err = null;
-        if (reply.responseFlags & FL_R_QUERY_FAILURE) {
-            // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
-            reply.error = qbson.decode(reply.documents[0]);
-            reply.documents = null;
-            // send MongoError for query failure and bad bson
-            err = new MongoError('QueryFailure');
-            for (var k in reply.error) err[k] = reply.error[k];
+        if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
+            if (reply.responseFlags & FL_R_QUERY_FAILURE) {
+                // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
+                reply.error = qbson.decode(reply.documents[0]);
+                reply.documents = null;
+                // send MongoError for query failure and bad bson
+                err = new MongoError('QueryFailure');
+                for (var k in reply.error) err[k] = reply.error[k];
+            }
+            else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
+                reply.error = new MongoError('CursorNotFound');
+                reply.documents = null;
+                err = reply.error;
+            }
         }
 
         // dispatch reply to its callback
         qInfo.cb(err, reply.documents);
-        qmongo._responseCount += 1;
         qmongo._runningCallsCount -= 1;
         handledCount += 1;
+        qmongo._responseCount += 1;
 
         // every 8k replies compact the callback map (adds 4% overhead, but needed to not leak mem)
         // Runtime is not affected by compaction with up to 500k concurrent calls.
@@ -435,8 +446,10 @@ function deliverRepliesQ( qmongo, qbuf ) {
             // 2x faster to gc the object by the list of keys than to delete from 50k
             compactCbMap(qmongo);
         }
+
+        // TODO: yield to the event loop periodically
     }
-    qmongo._dispatchRunning = false;
+    qmongo._deliverRunning = false;
     qmongo.scheduleQuery();
 }
 
@@ -467,29 +480,27 @@ function decodeHeader( buf, offset ) {
     };
 }
 
-function decodeReply( buf, base, bound, raw ) {
 // TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
+// including encodeHeader, decodeHeader, decodeReply
+function decodeReply( buf, base, bound, raw ) {
     var reply = {
-        // TODO: flatten header fields into reply
-        header: null, // caller already parsed it to know to call us
-        responseFlags: getUInt32(buf, base+16),
-        cursorId: new qbson.Long(getUInt32(buf, base+20), getUInt32(buf, base+24)),
-        startingFrom: getUInt32(buf, base+28),
-        numberReturned: getUInt32(buf, base+32),
+        responseFlags: getUInt32(buf, base),
+        cursorId: new qbson.Long(getUInt32(buf, base+4), getUInt32(buf, base+8)),
+        startingFrom: getUInt32(buf, base+12),
+        numberReturned: getUInt32(buf, base+16),
         error: null,
         documents: new Array(),
     };
-    base += 16 + 20;
+    base += 20;
 
     // documents are end-to-end concatenated bson objects (mongodump format)
-    var numberFound = 0;
+    // TODO: non-blocking decode, take a callback
     while (base < bound) {
-        var len = getUInt32(buf, base);
-        var obj = buf.slice(base, base+len);    // return complete bson objects
-        if (!raw) obj = qbson.decode(obj);
+        var obj, len = getUInt32(buf, base);
+        // return a complete bson object if raw, or decode faster without buf.slice to object
+        var obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
         reply.documents.push(obj);
         base += len;
-        numberFound += 1;
     }
     if (base !== bound) {
         // FIXME: clean up without killing self.
@@ -497,17 +508,28 @@ function decodeReply( buf, base, bound, raw ) {
             "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
         throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
     }
-    if (numberFound !== reply.numberReturned) {
+    if (reply.documents.length !== reply.numberReturned) {
         // FIXME: handle this better
-        throw new MongoError("did not get expected number of documents, got " + numberFound + " vs " + reply.numberReturned);
+        throw new MongoError("did not get expected number of documents, got " + reply.documents.length + " vs " + reply.numberReturned);
     }
 
     return reply;
 }
 
-
 // quicktest:
 if (process.env['NODE_TEST'] === 'qmongo') {
+
+// instrument Buffer to easily examine strings contained in the binary data
+Buffer.INSPECT_MAX_BYTES = require('buffer').INSPECT_MAX_BYTES = 80;   // note: require('buffer') !== Buffer ??
+Buffer.prototype.strings = function(base, bound) {
+    if (!base) base = 0;
+    if (!bound) bound = Math.min(this.length, base + Buffer.INSPECT_MAX_BYTES);
+    var s = "";
+    for (var i=base; i<bound; i++) {
+        s += (this[i] >= 0x20 && this[i] < 128) ? String.fromCharCode(this[i]) : '.';
+    }
+    return s;
+}
 
 var assert = require('assert');
 
@@ -541,7 +563,10 @@ console.log("AR:", process.memoryUsage());
 //console.log("AR:", db);
             // 1.5m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
             // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
-            // 1m 20000@: 10.6 sec qmongo vs 11.1 sec mongodb (??) (but 5x smaller rss)
+            // 1m 200@, raw: .66 sec qmongo vs 1.6 sec mongodb, 45 mb vs 150 mb rss
+            //        , decoded: 7.7 sec vs 11.2 sec, 46 mb vs 82 mb rss
+            // 1m 20000@, raw: .79 sec qmongo vs 1.2 sec mongodb, 108 mb vs 308 mb rss
+            //          , decoded: 10 sec vs 11 sec, 96 (or 82) mb vs 335 mb rss
         }
     })
 });
