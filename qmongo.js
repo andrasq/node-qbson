@@ -201,49 +201,38 @@ QMongo.prototype.altFind = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (!callback) throw new Error("callback required");
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
-    var cbInfo = {
-        cb: callback,           // who to notify
-        raw: options.raw,       // how to decode the reply
-    };
-    this.queryQueue.push({
-        // TODO: caller must not change query or options!
-        // TODO: could buildQuery now, queue the message not the js objects
-        query: query,
-        // TODO: vet the options? eg only extract the recognized ones.
-        options: options,
-        callback: callback,
-        ns: _ns || this.dbName + '.' + this.collectionName,
-        cbInfo: cbInfo,
+    var ns = _ns || this.dbName + '.' + this.collectionName;
+    var qInfo;
+    this.queryQueue.push(qInfo = {
+        cb: callback,
+        raw: options.raw,
+        // TODO: impose our own default limit unless higher is specified
+        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF),
     });
     this.scheduleQuery();
-    return new QueryReply(cbInfo);
+    return new QueryReply(qInfo);
     // TODO: need an actual cursor to stream results of a complex sort
     // For now, batch large datasets explicitly.
 }
 
 // launch more find calls
 QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
-    var qry, cbInfo, id;
-    while (this._runningCallsCount < 1000 && (qry = this.queryQueue.shift())) {
-        if (this._closed) return qry.callback(new Error("connection closed"));
-        if (!this.socket) return qry.callback(new Error("not connected"));
+    var qInfo, id;
+    while (this._runningCallsCount < 100 && (qInfo = this.queryQueue.shift())) {
+        if (this._closed) return qInfo.cb(new Error("connection closed"));
+        if (!this.socket) return qInfo.cb(new Error("not connected"));
 
         id = _makeRequestId();
-        cbInfo = qry.cbInfo;
-        //cbInfo.tm = Date.now();
+        putInt32(id, qInfo.bson, 4);
 
         // TODO: rename callbacks -> cbMap
         if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
 
-        // TODO: impose a low default limit unless higher is specified
-        // TODO: buildQuery could take the cbInfo object instead of the parts
-        var queryBuf = buildQuery(id, qry.ns, qry.query, qry.options.fields, qry.options.skip || 0, qry.options.limit || 0x7FFFFFFF);
-
         // send the query on its way
         // data is actually transmitted only after we already installed the callback handler
-        this.socket.write(queryBuf);
-        this.sentIds.push(id);
-        this.callbacks[id] = cbInfo;
+        this.socket.write(qInfo.bson);
+        qInfo.bson = 'sent';
+        this.callbacks[id] = qInfo;
         this.sentIds.push(id);
         this._runningCallsCount += 1;
     }
@@ -268,22 +257,22 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 
     // then install the callback handler and return a cursor that can act on the returned data
     // TODO: this works for toArray, but must rework for nextObject()
-    var cbInfo;
-    cbInfo = {
+    var qInfo;
+    qInfo = {
         cb: callback,
         raw: options.raw
     };
-    return new QueryReply(this.callbacks[id] = cbInfo);
+    return new QueryReply(this.callbacks[id] = qInfo);
 
     // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
     // For now, batch large datasets explicitly.
 }
 
-function QueryReply( cbInfo ) {
-    this.cbInfo = cbInfo;
+function QueryReply( qInfo ) {
+    this.qInfo = qInfo;
 }
 QueryReply.prototype.toArray = function toArray( callback ) {
-    this.cbInfo.cb = callback;
+    this.qInfo.cb = callback;
 }
 QueryReply.prototype.batchSize = function batchSize( length ) {
     // TODO: later
@@ -334,12 +323,6 @@ function _makeRequestId( ) {
     return ++_lastRequestId;
     // a binary string eg "\x00\x01\x02" is 37% slower
 }
-function _putRequestId( id, buf, offset ) {
-    return putInt32(id, buf, offset);
-}
-function _getRequestId( buf, offset ) {
-    return getUInt32(buf, offset);
-}
 
 
 
@@ -374,8 +357,7 @@ function buildQuery( reqId, ns, query, fields, skip, limit ) {
 function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
     // TRY: return pack(buf, offset, ['i', length, 'i', reqId, 'i', respTo, 'i', opCode]);
     putInt32(length, buf, offset+0);
-    //putInt32(reqId, buf, offset+4);
-    _putRequestId(reqId, buf, offset+4);
+    putInt32(reqId, buf, offset+4);
     putInt32(respTo, buf, offset+8);
     putInt32(opCode, buf, offset+12);
     return offset+16;
@@ -418,14 +400,14 @@ function deliverRepliesQ( qmongo, qbuf ) {
         }
 
         // find the callback that gets this reply
-        var cbInfo = qmongo.callbacks[header.responseTo];
-        if (cbInfo) qmongo.callbacks[header.responseTo] = 0;
+        var qInfo = qmongo.callbacks[header.responseTo];
+        if (qInfo) qmongo.callbacks[header.responseTo] = 0;
         else {
-            console.log("qmongo: not ours, ignoring reply to %d", header.responseTo, cbInfo);
+            console.log("qmongo: not ours, ignoring reply to %d", header.responseTo, qInfo);
             continue;
         }
 
-        var reply = decodeReply(buf, 0, buf.length, cbInfo.raw);
+        var reply = decodeReply(buf, 0, buf.length, qInfo.raw);
         reply.header = header;
         var err = null;
         if (reply.responseFlags & FL_R_QUERY_FAILURE) {
@@ -438,7 +420,7 @@ function deliverRepliesQ( qmongo, qbuf ) {
         }
 
         // dispatch reply to its callback
-        cbInfo.cb(err, reply.documents);
+        qInfo.cb(err, reply.documents);
         qmongo._responseCount += 1;
         handledCount += 1;
 
@@ -466,7 +448,7 @@ function compactCbMap( qmongo ) {
         }
     }
     qmongo.callbacks = cbMap2;
-    qmongo.cbInfo = sentIds2;
+    qmongo.qInfo = sentIds2;
 
 }
 
@@ -474,7 +456,7 @@ function decodeHeader( buf, offset ) {
     return {
         length: getUInt32(buf, offset+0),
         requestId: getUInt32(buf, offset+4),            // response id generated by mongod
-        responseTo: _getRequestId(buf, offset+8),       // id we supplied with the request we made
+        responseTo: getUInt32(buf, offset+8),           // id we supplied with the request we made
         opCode: getUInt32(buf, offset+12),
     };
 }
