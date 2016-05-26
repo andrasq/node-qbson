@@ -195,26 +195,30 @@ Collection.prototype = Collection.prototype;
 
 
 
+// append a find command to the query queue
+// the query queue meters the requests, and better supports a reconnect
 QMongo.prototype.altFind = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (!callback) throw new Error("callback required");
+    if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
     var cbInfo = {
-        id: 0,                  // request id, filled in when sent
-        tm: 0,                  // request timestamp, filled in when sent
         cb: callback,           // who to notify
         raw: options.raw,       // how to decode the reply
     };
     this.queryQueue.push({
+        // TODO: caller must not change query or options!
+        // TODO: could buildQuery now, queue the message not the js objects
         query: query,
+        // TODO: vet the options? eg only extract the recognized ones.
         options: options,
         callback: callback,
         ns: _ns || this.dbName + '.' + this.collectionName,
         cbInfo: cbInfo,
     });
     this.scheduleQuery();
+    return new QueryReply(cbInfo);
     // TODO: need an actual cursor to stream results of a complex sort
     // For now, batch large datasets explicitly.
-    return new QueryReply(cbInfo);
 }
 
 // launch more find calls
@@ -223,11 +227,9 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     while (this._runningCallsCount < 1000 && (qry = this.queryQueue.shift())) {
         if (this._closed) return qry.callback(new Error("connection closed"));
         if (!this.socket) return qry.callback(new Error("not connected"));
-        if (qry.options.fields && typeof qry.options.fields !== 'object') return qry.callback(new Error("fields must be an object"));
 
-        id = _getRequestId();
+        id = _makeRequestId();
         cbInfo = qry.cbInfo;
-        cbInfo.id = id;
         //cbInfo.tm = Date.now();
 
         // TODO: rename callbacks -> cbMap
@@ -235,7 +237,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
 
         // TODO: impose a low default limit unless higher is specified
         // TODO: buildQuery could take the cbInfo object instead of the parts
-        var queryBuf = buildQuery(id, cbInfo.ns, cbInfo.query, cbInfo.options.fields, cbInfo.options.skip || 0, cbInfo.options.limit || 0x7FFFFFFF);
+        var queryBuf = buildQuery(id, qry.ns, qry.query, qry.options.fields, qry.options.skip || 0, qry.options.limit || 0x7FFFFFFF);
 
         // send the query on its way
         // data is actually transmitted only after we already installed the callback handler
@@ -255,8 +257,6 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 
     var ns = _ns || this.dbName + '.' + this.collectionName;
 
-// TODO: put all queries on the schedule queue (qlist), then this.schedule() to launch them
-
     var id = _makeRequestId();
     if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
     var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
@@ -270,9 +270,7 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     // TODO: this works for toArray, but must rework for nextObject()
     var cbInfo;
     cbInfo = {
-        id: id,
         cb: callback,
-        //tm: Date.now(),
         raw: options.raw
     };
     return new QueryReply(this.callbacks[id] = cbInfo);
@@ -533,8 +531,8 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     var n = 0;
     var t1 = Date.now();
     // caution: 1e6 pending calls crashed my mongod!
-    var nloops = 50000;
-    var limit = 20;
+    var nloops = 5000;
+    var limit = 200;
     var expect = nloops * limit;
     // caution: mongodb needs `true`, mongo server accepts `1`
     var options = { limit: limit, raw: true };
