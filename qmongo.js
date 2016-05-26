@@ -27,14 +27,16 @@ function QMongo( socket, options ) {
     this.collectionName = options.collection || 'test';
     this.socket = socket;
     this.callbacks = new Object();
+    this.cbList = new Array();
     this.batchSize = options.batchSize || 400;
     this.qbuf = new QBuffer({ encoding: null });
     this._closed = false;
     this._dispatchRunning = false;
+    this._runningCallsCount = 0;
 }
 
 
-// requst opCodes from https://docs.mongodb.com/v3.0/reference/mongodb-wire-protocol/
+// request opCodes from https://docs.mongodb.com/v3.0/reference/mongodb-wire-protocol/
 var OP_REPLY = 1;               // Reply to a client request. responseTo is set.
 var OP_MSG = 1000;              // Generic msg command followed by a string.
 var OP_UPDATE = 2001;           // Update document.
@@ -63,7 +65,8 @@ var connectionPattern = new RegExp(
     "(\/(.*))?"                 // database[9], optional
 );
 // class method to connect and return a db object
-QMongo.connect = function connect( url, callback ) {
+QMongo.connect = function connect( url, options, callback ) {
+    if (!callback) { callback = options; options = {} }
     var parts = url.match(connectionPattern);
     if (!parts) throw new Error("invalid mongo connection string");
     var options = {
@@ -72,15 +75,15 @@ QMongo.connect = function connect( url, callback ) {
         hostname: parts[5],
         port: parts[7] || 27017,
         database: parts[9],
-        retryLimit: 200,        // try to reconnect for up to 2 sec
-        retryInterval: 10,      // every 1/100 sec
+        retryInterval: 10,      // try to reconnect every 1/100 sec
+        retryLimit: 200,        // for up to 2 sec
         retryCount: 0,
         allowHalfOpen: true,
     };
 
     // TODO: parse multiple host:port,host2:port2 params (to use the first)
-
     // TODO: parse ?options name=value,name2=value2 pairs, extract w, timeout, etc values
+    // TODO: make reconnect retryLimit (0 to disable) externally configurable
 
     QMongo._reconnect(new QMongo(), options, callback);
 };
@@ -90,7 +93,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     var socket, returned;
     try {
         var opts = {
-            host: options.hostname,
+            host: options.host || options.hostname,
             port: options.port,
             allowHalfOpen: options.allowHalfOpen,
         };
@@ -150,6 +153,7 @@ QMongo.prototype._error = function _error( err ) {
         this.callbacks[id](err);
     }
     this.callbacks = new Object();
+    this.cbList = new Array();
     return this;
 };
 
@@ -190,6 +194,58 @@ Collection.prototype = Collection.prototype;
 
 
 
+QMongo.prototype.altFind = function find( query, options, callback, _ns ) {
+    if (!callback && typeof options === 'function') { callback = options; options = {}; }
+    if (!callback) throw new Error("callback required");
+    var cbInfo = {
+        id: 0,                  // request id, filled in when sent
+        tm: 0,                  // request timestamp, filled in when sent
+        cb: callback,           // who to notify
+        raw: options.raw,       // how to decode the reply
+        _done: false,           // can cbInfo be disposed of
+    };
+    this.queryQueue.push({
+        query: query,
+        options: options,
+        callback: callback,
+        ns: _ns || this.dbName + '.' + this.collectionName,
+        cbInfo: cbInfo,
+    });
+    this.scheduleQuery();
+    // TODO: need an actual cursor to stream results of a complex sort
+    // For now, batch large datasets explicitly.
+    return new QueryReply(cbInfo);
+}
+
+// launch more find calls
+QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
+    var qry, cbInfo, id;
+    while (this._runningCallsCount < 1000 && (qry = this.queryQueue.shift())) {
+        if (this._closed) return qry.callback(new Error("connection closed"));
+        if (!this.socket) return qry.callback(new Error("not connected"));
+        if (qry.options.fields && typeof qry.options.fields !== 'object') return qry.callback(new Error("fields must be an object"));
+
+        id = _getRequestId();
+        cbInfo = qry.cbInfo;
+        cbInfo.id = id;
+        cbInfo.tm = Date.now();
+
+        // TODO: rename callbacks -> cbMap
+        if (this.callbacks[id] && !this.callbacks[id]._done) throw new Error("qmongo: assertion error: duplicate requestId " + id);
+
+        // TODO: impose a low default limit unless higher is specified
+        // TODO: buildQuery could take the cbInfo object instead of the parts
+        var queryBuf = buildQuery(id, cbInfo.ns, cbInfo.query, cbInfo.options.fields, cbInfo.options.skip || 0, cbInfo.options.limit || 0x7FFFFFFF);
+
+        // send the query on its way
+        // data is actually transmitted only after we already installed the callback handler
+        this.socket.write(queryBuf);
+        this.callbacks[id] = cbInfo;
+        this.cbList.push(cbInfo);
+        this._runningCallsCount += 1;
+    }
+}
+
 QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (this._closed) return callback(new Error("connection closed"));
@@ -197,8 +253,11 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
 
     var ns = _ns || this.dbName + '.' + this.collectionName;
+
+// TODO: put all queries on the schedule queue (qlist), then this.schedule() to launch them
+
     var id = _getRequestId();
-    if (this.callbacks[id]) throw new Error("qmongo: assertion error: duplicate requestId " + id);
+    if (this.callbacks[id] && !this.callbacks[id]._done) throw new Error("qmongo: assertion error: duplicate requestId " + id);
     var queryBuf = buildQuery(id, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF);
 
     // start the query on its way
@@ -273,6 +332,7 @@ function _getRequestId( ) {
 }
 function _recycleRequestId( id ) {
     // reuse ids 1..16k, those are the fastest hash indexes.  Strings are fast, large numbers are very slow.
+    // TODO: this may not be workable... eg the id of a timed-out call must be blacklisted
     if (id === _lastRequestId) _lastRequestId--;
     else if (id < 16000) _freeRequestIds.push(id);
 }
@@ -330,8 +390,6 @@ function deliverRepliesQ( qmongo, qbuf ) {
     var len;
     // TODO: create qbuf api to peek at bytes without having to slice ... maybe qbuf.getInt(pos) ?
     while (qbuf.length >= 36 && (len = getUInt32(qbuf.peek(4), 0)) <= qbuf.length) {
-        // stop if limit reached
-
         // stop if next response is not fully arrived
         // TODO: add a readInt32LE() method on qbuf to not have to slice
         if (qbuf.length <= 4) break;
@@ -357,7 +415,7 @@ function deliverRepliesQ( qmongo, qbuf ) {
         // find the callback that gets this reply
         var cbInfo = qmongo.callbacks[header.responseTo];
         if (!cbInfo) {
-            console.log("qmongo: reply not ours, ignoring responseTo %d", reply.header.responseTo, cbInfo);
+            console.log("qmongo: not ours, ignoring reply to %d", reply.header.responseTo, cbInfo);
             continue;
         }
 
@@ -368,8 +426,8 @@ function deliverRepliesQ( qmongo, qbuf ) {
             // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
             reply.error = qbson.decode(reply.documents[0]);
             reply.documents = [];
-            // MongoError comes from query failures and bad bson
-            err = new MongoError();
+            // send MongoError for query failure and bad bson
+            err = new MongoError('QueryFailure');
             for (var k in reply.error) err[k] = reply.error[k];
         }
 
@@ -383,6 +441,21 @@ function deliverRepliesQ( qmongo, qbuf ) {
 }
 
 
+function compactCbMap( qmongo ) {
+    var cbMap2 = new Object(), cbList2 = new Array();
+    var cbList = qmongo.cbList;
+
+    for (var i=0; i<cbList.length; i++) {
+        if (!cbList[i]._done) {
+            cbMap2[cbList[i].id] = cbList[i];
+            cbList2.push(cbList[i]);
+        }
+    }
+    qmongo.callbacks = cbMap2;
+    qmongo.cbInfo = cbList2;
+
+}
+
 function decodeHeader( buf, offset ) {
     return {
         length: getUInt32(buf, offset+0),
@@ -394,7 +467,6 @@ function decodeHeader( buf, offset ) {
 
 function decodeReply( buf, base, bound, raw ) {
 // TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
-// TODO: decode to object here? (to recycle buffers sooner)
     var reply = {
         // TODO: flatten header fields into reply
         header: null, // filled in by caller who already parsed it to know to call us
@@ -445,6 +517,7 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     var n = 0;
     var t1 = Date.now();
     var nloops = 5000;
+    // caution: 1e6 pending calls crashed my mongod!
     var limit = 200;
     var expect = nloops * limit;
     var options = { limit: limit, raw: true };
@@ -453,7 +526,7 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     var t1 = Date.now();
   for (var i=0; i<nloops; i++)
     db.db('kinvey').collection('kdsdir').find({}, options).toArray(function(err, docs) {
-        if (err) throw err;
+        if (err) { console.log("AR: find error", err); throw err; }
         assert(docs[0]._id || Buffer.isBuffer(docs[0]) || console.log(docs[0]));
         n += docs.length;
         if (n >= expect) {
@@ -461,7 +534,8 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
             console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
             console.log("AR:", process.memoryUsage());
             db.close();
-            console.log("AR:", process.memoryUsage());
+console.log("AR:", process.memoryUsage());
+//console.log("AR:", db);
             // 1.2m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
             // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
         }
