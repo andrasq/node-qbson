@@ -33,6 +33,7 @@ function QMongo( socket, options ) {
     this._closed = false;
     this._dispatchRunning = false;
     this._runningCallsCount = 0;
+    this._responseCount = 0;
 }
 
 
@@ -112,7 +113,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     socket.on('data', function(chunk) {
         // gather the data and try to deliver.  mutexes and pacing in the delivery func
         qmongo.qbuf.write(chunk);
-        deliverRepliesQ(qmongo, qmongo.qbuf);
+        setImmediate(deliverRepliesQ, qmongo, qmongo.qbuf);
     });
 
     // catch socket errors else eg ECONNREFUSED is fatal
@@ -198,7 +199,7 @@ QMongo.prototype.altFind = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (!callback) throw new Error("callback required");
     var cbInfo = {
-        id: 0,                  // request id, filled in when sent
+        //id: 0,                  // request id, filled in when sent
         tm: 0,                  // request timestamp, filled in when sent
         cb: callback,           // who to notify
         raw: options.raw,       // how to decode the reply
@@ -266,11 +267,14 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 
     // then install the callback handler and return a cursor that can act on the returned data
     // TODO: this works for toArray, but must rework for nextObject()
-    return new QueryReply(this.callbacks[id] = {
+    var cbInfo;
+    this.cbList.push(cbInfo = {
+        id: id,
         cb: callback,
         tm: Date.now(),
-        raw: options.raw,
+        raw: options.raw
     });
+    return new QueryReply(this.callbacks[id] = cbInfo);
 
     // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
     // For now, batch large datasets explicitly.
@@ -330,6 +334,9 @@ var _lastRequestId = 0;
 function _getRequestId( ) {    
     return _freeRequestIds.shift() || ++_lastRequestId;
 }
+function _putRequestId( id, buf, offset ) {
+    putInt32(id, buf, offset);
+}
 function _recycleRequestId( id ) {
     // reuse ids 1..16k, those are the fastest hash indexes.  Strings are fast, large numbers are very slow.
     // TODO: this may not be workable... eg the id of a timed-out call must be blacklisted
@@ -370,7 +377,8 @@ function buildQuery( reqId, ns, query, fields, skip, limit ) {
 function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 //    return pack(buf, offset, ['i', length, 'i', reqId, 'i', respTo, 'i', opCode]);
     putInt32(length, buf, offset+0);
-    putInt32(reqId, buf, offset+4);
+    //putInt32(reqId, buf, offset+4);
+    _putRequestId(reqId, buf, offset+4);
     putInt32(respTo, buf, offset+8);
     putInt32(opCode, buf, offset+12);
     return offset+16;
@@ -415,7 +423,7 @@ function deliverRepliesQ( qmongo, qbuf ) {
         // find the callback that gets this reply
         var cbInfo = qmongo.callbacks[header.responseTo];
         if (!cbInfo) {
-            console.log("qmongo: not ours, ignoring reply to %d", reply.header.responseTo, cbInfo);
+            console.log("qmongo: not ours, ignoring reply to %d", header.responseTo, cbInfo);
             continue;
         }
 
@@ -432,10 +440,17 @@ function deliverRepliesQ( qmongo, qbuf ) {
         }
 
         // dispatch reply to its callback
-        qmongo._responseCount += 1;
         cbInfo.cb(err, reply.documents);
-
+        qmongo._responseCount += 1;
+        cbInfo._done = 1;
         handledCount += 1;
+
+        // every 8k replies compact the callbacks object (adds 4% overhead, but needed to free mem)
+        // Runtime is not affected by compaction with up to 500k concurrent calls.
+        if ((qmongo._responseCount & 0x1FFF) === 0 /*&& qmongo._runningCallsCount < 100*/) {
+            // 2x faster to gc the object by the list of keys list than to delete from 50k
+            compactCbMap(qmongo);
+        }
     }
     qmongo._dispatchRunning = false;
 }
