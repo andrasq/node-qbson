@@ -27,7 +27,7 @@ function QMongo( socket, options ) {
     this.collectionName = options.collection || 'test';
     this.socket = socket;
     this.callbacks = new Object();
-    this.cbList = new Array();
+    this.sentIds = new Array();
     this.batchSize = options.batchSize || 400;
     this.qbuf = new QBuffer({ encoding: null });
     this._closed = false;
@@ -154,7 +154,7 @@ QMongo.prototype._error = function _error( err ) {
         this.callbacks[id](err);
     }
     this.callbacks = new Object();
-    this.cbList = new Array();
+    this.sentIds = new Array();
     return this;
 };
 
@@ -240,8 +240,9 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
         // send the query on its way
         // data is actually transmitted only after we already installed the callback handler
         this.socket.write(queryBuf);
+        this.sentIds.push(id);
         this.callbacks[id] = cbInfo;
-        this.cbList.push(cbInfo);
+        this.sentIds.push(id);
         this._runningCallsCount += 1;
     }
 }
@@ -263,16 +264,17 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     // start the query on its way
     // data is actually transmitted only after we already installed the callback handler
     this.socket.write(queryBuf);
+    this.sentIds.push(id);
 
     // then install the callback handler and return a cursor that can act on the returned data
     // TODO: this works for toArray, but must rework for nextObject()
     var cbInfo;
-    this.cbList.push(cbInfo = {
+    cbInfo = {
         id: id,
         cb: callback,
         //tm: Date.now(),
         raw: options.raw
-    });
+    };
     return new QueryReply(this.callbacks[id] = cbInfo);
 
     // TODO: need a cursor to stream the results of a complex sort (ie, not a single key)
@@ -442,10 +444,10 @@ function deliverRepliesQ( qmongo, qbuf ) {
         qmongo._responseCount += 1;
         handledCount += 1;
 
-        // every 8k replies compact the callbacks object (adds 4% overhead, but needed to free mem)
+        // every 8k replies compact the callback map (adds 4% overhead, but needed to not leak mem)
         // Runtime is not affected by compaction with up to 500k concurrent calls.
         if ((qmongo._responseCount & 0x1FFF) === 0 /*&& qmongo._runningCallsCount < 100*/) {
-            // 2x faster to gc the object by the list of keys list than to delete from 50k
+            // 2x faster to gc the object by the list of keys than to delete from 50k
             compactCbMap(qmongo);
         }
     }
@@ -454,19 +456,19 @@ function deliverRepliesQ( qmongo, qbuf ) {
 
 
 function compactCbMap( qmongo ) {
-    var cbMap2 = new Object(), cbList2 = new Array();
-    var cbMap = qmongo.callbacks, cbList = qmongo.cbList;
+    var cbMap2 = new Object(), sentIds2 = new Array();
+    var cbMap = qmongo.callbacks, sentIds = qmongo.sentIds;
 
-    var item;
-    for (var i=0; i<cbList.length; i++) {
-        item = cbList[i];
-        if (cbMap[item.id]) {
-            cbMap2[item.id] = item;
-            cbList2.push(item);
+    var id, item;
+    for (var i=0; i<sentIds.length; i++) {
+        id = sentIds[i];
+        if (cbMap[id]) {
+            cbMap2[id] = cbMap[id];
+            sentIds2.push(cbMap[id]);
         }
     }
     qmongo.callbacks = cbMap2;
-    qmongo.cbInfo = cbList2;
+    qmongo.cbInfo = sentIds2;
 
 }
 
@@ -530,11 +532,12 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
     if (err) throw err;
     var n = 0;
     var t1 = Date.now();
-    var nloops = 5000;
     // caution: 1e6 pending calls crashed my mongod!
-    var limit = 200;
+    var nloops = 50000;
+    var limit = 20;
     var expect = nloops * limit;
-    var options = { limit: limit, raw: 1 };
+    // caution: mongodb needs `true`, mongo server accepts `1`
+    var options = { limit: limit, raw: true };
 
     console.log("AR:", process.memoryUsage());
     var t1 = Date.now();
