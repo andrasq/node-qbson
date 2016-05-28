@@ -11,12 +11,8 @@
 
 'use strict';
 
-module.exports = bson_decode;
-module.exports.getBsonEntities = getBsonEntities;
-module.exports.getUInt32 = getUInt32;
-
-
 var bsonTypes = require('./bson-types');
+var bytes = require('./bytes');
 
 var ObjectId = bsonTypes.ObjectId;
 var Timestamp = bsonTypes.Timestamp;
@@ -24,6 +20,19 @@ var MinKey = bsonTypes.MinKey;
 var MaxKey = bsonTypes.MaxKey;
 var Long = bsonTypes.Long;
 var DbRef = bsonTypes.DbRef;
+
+var getInt32 = bytes.getInt32;
+var getUInt32 = bytes.getUInt32;
+var getInt64 = bytes.getInt64;
+var getFloat = bytes.getFloat64;
+var scanIntZ = bytes.scanIntZ;
+var scanStringZ = bytes.scanStringZ;
+var scanStringUtf8 = bytes.scanStringUtf8;
+
+module.exports = bson_decode;
+module.exports.getBsonEntities = getBsonEntities;
+module.exports.getUInt32 = getUInt32;
+
 
 function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
@@ -148,105 +157,6 @@ function getString( buf, base, bound ) {
     return str;
 }
 
-function getUInt32( buf, pos ) {
-    return getInt32(buf, pos) >>> 0;    // coerced to unsigned
-}
-
-function getInt32( buf, pos ) {
-    return buf[pos] +
-        (buf[pos+1] << 8) +
-        (buf[pos+2] << 16) +
-        (buf[pos+3] << 24);             // yes shift into the sign bit, coerce to signed
-}
-
-function getInt64( buf, pos ) {
-    // extract a Number from 64-bit signed integer
-    // Not all 64-bit ints are representable, Number has only 53 bits of precision.
-    var v1 = getInt32(buf, pos+4);
-    // this trick should work for 2-s complement +/- numbers within range
-    // note that overflow of a negative could flip the sign!
-    return (v1 * 0x100000000) + getUInt32(buf, pos);
-}
-
-/*
- * extract the 64-bit little-endian ieee 754 floating-point value 
- *   see http://en.wikipedia.org/wiki/Double-precision_floating-point_format
- *   1 bit sign + 11 bits exponent + (1 hidden mantissa 1 bit) + 52 bits mantissa (stored)
- */
-// recover the mantissa into a 20.32 bit fixed-point float,
-// then convert by shifting into the normalized 1.53 format
-// The mantissa low 32 bits become the 20.32 fixed-point fraction,
-// then the whole thing is scaled to the normalized 1.53 position.
-var _rshift32 = (1 / 0x100000000);      // >> 32 for floats
-var _rshift20 = (1 / 0x100000);         // >> 20 for floats
-var _lshift32 = (1 * 0x100000000);      // << 32
-var _rshift52 = (1 * _rshift32 * _rshift20);    // >> 52
-function getFloat( buf, pos ) {
-    var lowWord = getUInt32(buf, pos);
-    var highWord = getUInt32(buf, pos+4);
-    var mantissa = (highWord & 0x000FFFFF) * _lshift32 + lowWord;
-    var exponent = (highWord & 0x7FF00000) >> 20;
-    //var sign = (highWord >> 31);
-
-    var value;
-    if (exponent === 0x000) {
-        // zero if !mantissa, else subnormal (non-normalized reduced precision small value)
-        // recover negative zero -0.0 as distinct from 0.0
-        // subnormals do not have an implied leading 1 bit and are positioned 1 bit to the left
-        value = mantissa ? (mantissa * _rshift52) * pow2(-1023 + 1) : (highWord >> 31) ? -0.0 : 0.0;
-    }
-    else if (exponent < 0x7ff) {
-        // normalized value with an implied leading 1 bit and 1023 biased exponent
-        exponent -= 1023;
-        value = (1 + mantissa * _rshift52) * pow2(exponent);
-    }
-    else {
-        // Infinity if zero mantissa (+/- per sign), NaN if nonzero mantissa
-        value = mantissa ? NaN : Infinity;
-    }
-
-    return (highWord >> 31) ? -value : value;  // sign bit
-}
-// given an exponent n, return 2**n
-// n is always an integer, faster to shift when possible
-function pow2( exp ) {
-    return (exp >= 0) ? (exp <  31 ? (1 << exp) :        Math.pow(2, exp))
-                      : (exp > -31 ? (1 / (1 << -exp)) : Math.pow(2, exp));
-}
-
-// extract a decimal numeric "cstring" as a number
-function scanIntZ( buf, base, item ) {
-    var n = 0;
-    for (var i=base; buf[i]; i++) {
-        n = n * 10 + buf[i] - 0x30;
-    }
-    item.val = n;
-    return (item.end = i) + 1;
-}
-
-// get the NUL-terminated utf8 "cstring" string
-function scanStringZ( buf, base, item ) {
-    for (var i=base; buf[i]; i++) ;
-    // breakeven is around 13 chars (node 5; more with node 6)
-    if (i < base + 12) return scanStringUtf8(buf, base, item);
-    item.val = buf.toString('utf8', base, i);
-    return (item.end = i) + 1;
-}
-
-// get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
-// concatenating chars generates more gc activity, and is only faster for short strings
-function scanStringUtf8( buf, base, item ) {
-    var ch, str = "", code;
-    for (var i=base; buf[i]; i++) {
-        ch = buf[i];
-        if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
-        else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
-        else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
-        // TODO: should validity test succeeding chars
-    }
-    item.val = str;
-    return (item.end = i) + 1;
-}
 
 // extract a regular expression from the bson buffer
     // YIKES!  bson 0.3.2 encodes \x00 in the regex as a zero byte, which breaks the bson string!!
@@ -371,8 +281,8 @@ var data = bson.ObjectId("123456781234567812345678");
 //var data = require("/home/andras/work/src/kds.git/package.json");
 //var data = require("/home/andras/work/src/kds.git/config.json");
 //var data = o;                           // 350% +/- (compound w/ array; 15% w/o)
-//var data = require('./dataBatch.js');
-//var data = require('./prod-data.js');
+//var data = require('./test/dataBatch.js');
+//var data = require('./test/prod-data.js');
 var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
 var data = 1234.5;

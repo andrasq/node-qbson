@@ -1,15 +1,15 @@
 /**
  * Byte handling, read and write data to/from byte arrays.
  *
- * The get functions take a byte array and return the value at offset
+ * The `get` functions take a byte array and return the value at offset
  * or between the offset and bound.
  *
- * The put functions take a value, byte array and offset, and store the
+ * The `put` functions take a value, byte array and offset, and store the
  * value at offset.
  *
- * The scan functions take a byte array and populate the passed in byteEntity
+ * The `scan` functions take a byte array and populate the given byteEntity
  * with the value at offset and the end of the value, and return the offset
- * in the array of the next value.  (The end and next value offset may be
+ * of the next value in the array.  (The end and next value offset may be
  * different if the value is terminated explicitly, eg NUL terminated strings.)
  *
  * The default storage order for the bytes is little-endian (least significant
