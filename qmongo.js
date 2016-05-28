@@ -8,15 +8,23 @@ module.exports.Collection = Collection;         // type returned by qmongo.db().
 module.exports.Cursor = null;                   // placeholder for find()
 module.exports.MongoError = MongoError;
 
+// TODO: factor out the callbacked primitives
+// qm.opQuery: function( query, fields, skip, limit, cb ) { },
+// TODO: the next two can use a precompiled template, poke the cursor id (and limit), copy into a new buffer (??), and write
+// Maybe cache a set of write buffers to not have to allocate new each time.
+// TODO: figure out a way to do adaptive batch sizes on getMore (ie, result set size efficiency)
+// qm.opGetMore: function( cursorId, limit, cb ) { },
+// qm.opKillCursors: function( cursorId /* , ... */ ) { },
 
 var net = require('net');
 var util = require('util');
 var crypto = require('crypto');
 
 var QBuffer = require('qbuffer');
+var QList = require('qlist');
 var utf8 = require('./utf8');
 var qbson = require('./qbson');
-var QList = require('qlist');
+var bytes = require('./bytes');
 
 var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
@@ -43,6 +51,8 @@ function QMongo( socket, options ) {
     this.batchSize = options.batchSize || 400;
     this._closed = false;
     this._deliverRunning = false;
+// TODO: rename _pendingRepliesCount, and only increment if a reply is expected (ie opQuery and opGetMore)
+// to be able to pump cursor cancel messages without penalty
     this._runningCallsCount = 0;
     this._responseCount = 0;
 }
@@ -328,6 +338,7 @@ QMongo.prototype = QMongo.prototype;
 // return a request id that is not used by any of the current calls
 // TODO: should be per object (per socket, actually)
 // simplest to use integers, a binary string eg "\x00\x01\x02" is 37% slower
+// note: 5% penalty for large numbers as ids (ie, million+)
 var _lastRequestId = 0;
 function _makeRequestId( ) {    
     return ++_lastRequestId;
@@ -417,25 +428,34 @@ function deliverRepliesQ( qmongo, qbuf ) {
 
         // decode the reply itself, retrieve and decode the returned documents
         var reply = decodeReply(buf, 16, buf.length, qInfo.raw);
+        var docs = reply.documents;
         var err = null;
         if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
             if (reply.responseFlags & FL_R_QUERY_FAILURE) {
                 // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
                 reply.error = qbson.decode(reply.documents[0]);
-                reply.documents = null;
+                docs = null;
                 // send MongoError for query failure and bad bson
                 err = new MongoError('QueryFailure');
                 for (var k in reply.error) err[k] = reply.error[k];
             }
             else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
                 reply.error = new MongoError('CursorNotFound');
-                reply.documents = null;
+                docs = null;
                 err = reply.error;
             }
         }
 
+        // FIXME: clean up: if got limit docs but there is a cursor too, close the cursor
+        if (docs.length >= qInfo.limit && reply.cursorId) {
+            // cursor is left open because the wire protocol has no way to indicate
+            // whether the query was the first batch of many, or the entire result set.
+            // qm.opKillCursors(reply.cursorId);
+            // where closeCursor has a pre-prepared command template, pokes the cursor id, and writes it ;-)
+        }
+
         // dispatch reply to its callback
-        qInfo.cb(err, reply.documents);
+        qInfo.cb(err, docs, reply.cursorId);
         qmongo._runningCallsCount -= 1;
         handledCount += 1;
         qmongo._responseCount += 1;
@@ -483,9 +503,10 @@ function decodeHeader( buf, offset ) {
 // TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
 // including encodeHeader, decodeHeader, decodeReply
 function decodeReply( buf, base, bound, raw ) {
+    var low32 = getUInt32(buf, base+4), high32 = getUInt32(buf, base+8);
     var reply = {
         responseFlags: getUInt32(buf, base),
-        cursorId: new qbson.Long(getUInt32(buf, base+4), getUInt32(buf, base+8)),
+        cursorId: (low32 && high32) ? new qbson.Long(low32, high32) : 0,
         startingFrom: getUInt32(buf, base+12),
         numberReturned: getUInt32(buf, base+16),
         error: null,
@@ -503,7 +524,7 @@ function decodeReply( buf, base, bound, raw ) {
         base += len;
     }
     if (base !== bound) {
-        // FIXME: clean up without killing self.
+        // FIXME: clean up without killing self. (eg, make a method, and emit 'error')
         console.log("qmongo: incomplete entity, header:", decodeHeader(buf, base), "flags:", reply.responseFlags.toString(16),
             "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
         throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
