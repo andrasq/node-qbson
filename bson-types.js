@@ -12,7 +12,7 @@
 'use strict';
 
 var ObjectId = require('./object-id.js');
-// var Long = require('./long.js');
+var bytes = require('./bytes.js');
 
 /*
  * makeFunction evals the function definition string in non-strict mode, thus has to
@@ -21,6 +21,12 @@ var ObjectId = require('./object-id.js');
 var makeFunction = require('./make-function.js');
 
 module.exports = {
+    // bson type info
+    typeIds: typeIds(),
+    typeInfo: typeInfo(),
+    typeSizes: typeSizes(),
+
+    // classes of special bson types
     ObjectId: ObjectId,
     ObjectID: ObjectId,
     Timestamp: Timestamp,
@@ -28,11 +34,9 @@ module.exports = {
     MaxKey: MaxKey,
     Long: Long,
     DbRef: DbRef,
-    makeFunction: makeFunction,
 
-    typeIds: typeIds(),
-    typeInfo: typeInfo(),
-    typeSizes: typeSizes(),
+    // function with or without scope builder
+    makeFunction: makeFunction,
 };
 
 // http://bsonspec.org/spec.html
@@ -115,40 +119,51 @@ function typeSizes() {
  * (note: stored in little endian format, the second word first)
  */
 function Timestamp( t, i ) {
-    this.Timestamp = 1;
     this.time = t;
     this.inc = i;
 }
+
 
 /*
  * Special type which compares lower than all other possible BSON element values.
  * This is a constant, identified by its type.
  */
 function MinKey( ) {
-    if (this === global || !this) return new MinKey();
-    this.MinKey = 1;
 }
+
 
 /*
  * Special type which compares higher than all other possible BSON element values.
  * This is a constant, identified by its type.
  */
 function MaxKey( ) {
-    if (this === global || !this) return new MaxKey();
-    this.MaxKey = 1;
 }
 
-// stub in Long, actual implementation should extend this class
+
+/*
+ * 64-bit integer.  We can read it and write it, but no arithmetic.
+ */
 function Long( lowWord, highWord ) {
-    this.Long = 1;
     this.low32 = lowWord;
     this.high32 = highWord;
-    // TODO: init from bytes? eg (buf, base)
 }
+Long.prototype.put = function get( buf, base ) {
+    this.low32 = bytes.getUInt32(buf, base);
+    this.high32 = bytes.getUInt32(buf, base+4);
+}
+Long.prototype.put = function get( buf, base ) {
+    bytes.putInt32(this.low32, buf, base);
+    bytes.putInt32(this.high32, buf, base+4);
+}
+Long.prototype = Long.prototype;
 
-// DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
+
+/*
+ * DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
+ * We can create objects of this type, thats it.
+ */
 function DbRef( name, oid ) {
-    this.DbRef = 1;
     this.name = name;
     this.oid = oid;
 }
+// TODO: add get and put methods to the class.

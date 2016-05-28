@@ -3,7 +3,7 @@
  *
  * The easiest way to apply the bson scope to the function is
  * with the js `with` keyword.  However, `with` is not allowed
- * in 'use strict' mode, so move it here and have it non-strict.
+ * in 'use strict' mode, so move it here and run it non-strict.
  *
  * 2016-05-21 - AR.
  */

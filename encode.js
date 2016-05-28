@@ -10,12 +10,17 @@
 
 'use strict';
 
+var bytes = require('./bytes.js');
 var utf8 = require('./utf8.js');
 
 module.exports = bson_encode;
 module.exports.guessSize = guessSize;
 module.exports.encodeEntities = encodeEntities;
-module.exports.putInt32 = putInt32;
+module.exports.putInt32 = bytes.putInt32;
+
+var putInt32 = bytes.putInt32;
+var putInt64 = bytes.putInt64;
+var putFloat = bytes.putFloat64;
 
 var ObjectId = require('./object-id.js');
 
@@ -235,33 +240,6 @@ function putStringZ( s, target, offset ) {
 function putString( s, target, offset ) {
     if (s.length < 80) return utf8.encodeUtf8(s, 0, s.length, target, offset);
     else return offset + target.write(s, offset, 'utf8');
-}
-
-function putInt32( n, target, offset ) {
-    target[offset++] = n & 0xFF;
-    target[offset++] = (n >> 8) & 0xFF;
-    target[offset++] = (n >> 16) & 0xFF;
-    target[offset++] = (n >> 24) & 0xFF;
-    return offset;
-}
-
-function putInt64( n, target, offset ) {
-    putInt32(n, target, offset);
-    putInt32(n / 0x100000000, target, offset+4);
-    return offset + 8;
-}
-
-var _floatBuf = new Buffer(8);
-function putFloat( n, target, offset ) {
-    if (target.writeDoubleLE) {
-        target.writeDoubleLE(n, offset, true);
-        return offset + 8;
-    }
-    else {
-        _floatBuf.writeDoubleLE(n, 0, true);
-        for (var i=0; i<8; i++) target[offset++] = _floatBuf[i];
-        return offset;
-    }
 }
 
 
