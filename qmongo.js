@@ -186,7 +186,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
         if (!options.username) return callback(null, qmongo);
 
         // auth with username + password
-        qmongo.auth(options.username, options.password, function(err) {
+        qmongo.auth(options.username, options.password, options.database, function(err) {
             if (err) console.log("qmongo: auth failed for %s", options.username);
             callback(err, qmongo);
         });
@@ -222,15 +222,18 @@ Db.prototype.collection = function collection( collectionName, callback ) {
     var coll = new Collection(this.qmongo, this.dbName, collectionName);
     return (callback) ? callback(null, coll) : coll;
 }
+Db.prototype.runCommand = function runCommand( cmd, args, callback ) {
+    if (!callback) { callback = args; args = null; }
+    this.qmongo.db(this.dbName).collection('$cmd').find(cmd, {w: 1, limit: 1}, function(err, ret) {
+        return err ? callback(err) : callback(null, ret[0]);
+    });
+}
 Db.prototype = Db.prototype;
 
 function Collection( qmongo, dbName, collectionName ) {
     this.qmongo = qmongo;
     this.dbName = dbName;
     this.collectionName = collectionName;
-}
-Collection.prototype.runCommand = function runCommand( cmd, args, callback ) {
-    return this.qmongo.runCommand(cmd, args, callback);
 }
 Collection.prototype.find = function find( query, options, callback ) {
     var _ns = this.dbName + '.' + this.collectionName;          // namespace to use
@@ -300,10 +303,8 @@ QueryReply.prototype.batchSize = function batchSize( length ) {
 }
 QueryReply.prototype = QueryReply.prototype;
 
-QMongo.prototype.runCommand = function runCommand( cmd, args, callback ) {
-    if (!callback) { callback = args; args = null; }
-    this.collection('$cmd').find(cmd, {w: 1, limit: 1}, callback);
-}
+// expose runCommand on the underlying qm object as well, runs against the qm.dbName db
+QMongo.prototype.runCommand = Db.prototype.runCommand;
 
 // compute the hex md5 checksum
 function md5sum( str ) {
@@ -311,22 +312,24 @@ function md5sum( str ) {
     return cksum;
 }
 
-QMongo.prototype.auth = function auth( username, password, callback ) {
+QMongo.prototype.auth = function auth( username, password, database, callback ) {
+    if (!callback) { callback = database; database = null; }
+    if (!database) database = 'admin';
+
     var self = this;
-    self.runCommand({ getnonce: 1}, function(err, ret) {
+    self.db(database).runCommand({ getnonce: 1}, function(err, ret) {
+        if (!err && !ret.ok) err = new Error("auth error: code " + ret.code + ", " + ret.errmsg);
         if (err) return callback(err);
-        self.runCommand({
+        self.db(database).runCommand({
             authenticate: 1,
             nonce: ret.nonce,
             user: username,
             key: md5sum(ret.nonce + username + md5sum(username + ":mongo:" + password))
         },
-        function(err) {
-// FIXME: does not error out on invalid creds?? eg foo@localhost vs @localhost
-            callback(err)
+        function(err, ret) {
+            if (!err && !ret.ok) err = new Error("auth error: code " + ret.code + ", " + ret.errmsg);
+            callback(err);
         });
-        // gets "field missing/wrong type in received authenticate command" if no mechanism
-        // mechanism PLAIN only in enterprise version
     });
 }
 
