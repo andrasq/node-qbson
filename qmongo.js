@@ -270,7 +270,7 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 // (that would need the callback to be left registered until got a zero cursorId)
 
     this.scheduleQuery();
-    return new QueryReply(qInfo);
+    return new QueryReply(qInfo, this, ns, limit);
 
     // TODO: need an actual cursor to stream results of a complex sort
     // For now, batch large datasets explicitly.
@@ -311,14 +311,28 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     }
 }
 
-function QueryReply( qInfo ) {
+function QueryReply( qInfo, qm, ns, fetchLimit ) {
     this.qInfo = qInfo;
+    this.qm = qm;
+    this.ns = ns;
+    // fetchLimit is the user-specified max documents to return,
+    // as opposed to the internal batch limit
+    this.fetchLimit = fetchLimit;
+
+    this.batchSize = this.qm.batchSize;
+    this.clientCb = qInfo.cb;   // callback to deliver the results
+    this.cursorId = 0;          // set once results start arriving, cleared when done
+    this.docs = null;           // the array of matching documents
+return this;
 }
+// fetch all remaining items in the result set
 QueryReply.prototype.toArray = function toArray( callback ) {
     this.qInfo.cb = callback;
 }
+QueryReply.prototype.nextObject = QueryReply.prototype.fetch;
 QueryReply.prototype.batchSize = function batchSize( length ) {
-    // TODO: later
+    this.batchSize = batchSize;
+// FIXME: stuff the batchSize into this.qInfo.bson as the query limit
     return this;
 }
 QueryReply.prototype = QueryReply.prototype;
