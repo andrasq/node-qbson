@@ -311,21 +311,22 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
 }
 
 QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
-    var length = 16 + 8 + 8 * arguments.length;
-    var bson = new Buffer(length);
-    // header
-    putInt32(length, bson, 0);
-    //putInt32(0, bson, 4);     // reqId, filled in by scheduleQuery
-    putInt32(0, bson, 8);       // responseTo
+    var bson = new Buffer(16 + 8 + 8 * arguments.length);
+
+    // header: total length, reqId, repsonseTo, opCode
+    putInt32(bson.length, bson, 0);
+    // reqId filled in by scheduleQuery
+    putInt32(0, bson, 8);
     putInt32(OP_KILL_CURSORS, bson, 12);
 
-    // OP_KILL_CURSORS struct: header, ZERO, cursorCount, [cursors]
+    // opKillCursors: ZERO, cursorCount, cursorIds back-to-back
     putInt32(0, bson, 16);
     putInt32(arguments.length, bson, 20);
-    for (var i=0; i<arguments.length; i++) arguments[i].put(bson, 20 + 8*i);
+    for (var i=0; i<arguments.length; i++) {
+        arguments[i].put(bson, 24 + 8*i);
+    }
 
-    var qInfo;
-    this.queryQueue.push(qInfo = {
+    this.queryQueue.push(/*qInfo =*/ {
         cb: null,
         bson: bson
     });
