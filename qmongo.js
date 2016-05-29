@@ -9,13 +9,9 @@ module.exports.Collection = Collection;         // type returned by qmongo.db().
 module.exports.Cursor = Cursor;                 // type returned by find()
 module.exports.MongoError = MongoError;
 
-// TODO: factor out the callbacked primitives
-// qm.opQuery: function( query, fields, skip, limit, cb ) { },
 // TODO: the next two can use a precompiled template, poke the cursor id (and limit), copy into a new buffer (??), and write
 // Maybe cache a set of write buffers to not have to allocate new each time.
 // TODO: figure out a way to do adaptive batch sizes on getMore (ie, result set size efficiency)
-// qm.opGetMore: function( cursorId, limit, cb ) { },
-// qm.opKillCursors: function( cursorId /* , ... */ ) { },
 
 var net = require('net');
 var util = require('util');
@@ -54,7 +50,8 @@ function QMongo( socket, options ) {
 
     this.dbName = options.database || 'test';
     this.collectionName = options.collection || 'test';
-    this.batchSize = options.batchSize || 5000;
+    // NOTE: this version fetches just one batch, the entire result set must fit.
+    this.batchSize = options.batchSize || 0x7FFFFFFF;
     this._closed = false;
     this._deliverRunning = false;
 // TODO: rename _pendingRepliesCount, and only increment if a reply is expected (ie opQuery and opGetMore)
@@ -314,9 +311,10 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
 }
 
 QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
-    var bson = new Buffer(16 + 8 + 8 * arguments.length);
+    var length = 16 + 8 + 8 * arguments.length;
+    var bson = new Buffer(length);
     // header
-    putInt32(bson.length, bson, 0);
+    putInt32(length, bson, 0);
     //putInt32(0, bson, 4);     // reqId, filled in by scheduleQuery
     putInt32(0, bson, 8);       // responseTo
     putInt32(OP_KILL_CURSORS, bson, 12);
@@ -336,9 +334,9 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
 
 QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fields, callback ) {
     // TODO: normalize query sizes for easier reuse?
-    var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
-        qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
     // TODO: move the work of buildQuery in here
+    // var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
+    //     qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
     var bson = buildQuery(0, ns, query, fields, skip, limit);
 
     var qInfo;
@@ -363,12 +361,12 @@ function _setOptionFlags( options, bson, offset) {
     // FL_Q_PARTIAL
 }
 
-QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, callback ) {
+QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callback ) {
     // TODO: normalize query sizes for easier reuse?
     var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
 
     putInt32(0, bson, 16);                      // ZERO
-    var offset = putStringZ(ns, bson, 20);      // get_more needs the namespace - why?
+    var offset = putStringZ(ns, bson, 20);      // ns - why is namespace needed?
     putInt32(limit, bson, offset);              // limit
     offset = cursorId.put(bson, offset+4);      // cursor Id
 
@@ -378,7 +376,8 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, callback )
     var qInfo;
     this.queryQueue.push(qInfo = {
         cb: callback,
-        bson: bson
+        bson: bson,
+        raw: raw,
     });
     this.scheduleQuery();
 }
@@ -410,7 +409,7 @@ Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
         else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
         this.fetchLimit -= docs.length;
     }
-    if (this.fetchLimit <= 0) this.close();
+    if (this.fetchLimit <= 0 || !cursorId) this.close();
 }
 // close the query to free the cursor memory on the server
 Cursor.prototype.close = function close( ) {
@@ -436,7 +435,7 @@ Cursor.prototype.fetch = function fetch( cb ) {
     if (!this.cursorId) return cb(null, null);
 
     this.qm.opGetMore(
-        this.ns, this.getFetchLimit(), this.cursorId,
+        this.ns, this.getFetchLimit(), this.cursorId, this.qInfo.raw,
         function(err, docs, cursorId) {
             self._refill(err, docs, cusorId);
             return self.fetch(cb);
@@ -455,19 +454,30 @@ Cursor.prototype.toArray = function toArray( callback ) {
 return this;
 
     this.clientCb = callback;
-    var self = this;
     var ret = null;
+    var batches = new Array();
+    var count = 0;
+    if (this.docs) {
+        count = this.docs.length;
+        batches.push(this.docs);
+        this.docs = null;
+    }
+    var self = this;
     this.qInfo.cb = function refill(err, docs, cursorId) {
         self._refill(err, docs, cursorId);
+        if (docs) {
+            batches.push(docs);
+            count += docs.length;
+            self.docs = null;
+        }
         if (err) {
             return self.clientCb(err);
         }
         else if (self.cursorId) {
-            return self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, refill);
+            return self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, self.qInfo.raw, refill);
         }
         else {
-            var docs = self.docs;
-            self.docs = null;
+            var docs = concatArrays(batches);
             return self.clientCb(null, docs);
         }
     }
@@ -481,6 +491,16 @@ Cursor.prototype = Cursor.prototype;
 
 // expose runCommand on the underlying qm object as well, runs against the qm.dbName db
 QMongo.prototype.runCommand = Db.prototype.runCommand;
+
+function concatArrays( arrays ) {
+    var arr = new Array();
+    for (var i=0; i<arrays.length; i++) {
+        for (var j=0; j<arrays[i].length; j++) {
+            arr.push(arrays[i][j]);
+        }
+    }
+    return arr;
+}
 
 // compute the hex md5 checksum
 function md5sum( str ) {
