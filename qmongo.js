@@ -393,15 +393,79 @@ function QueryReply( qInfo, qm, ns, fetchLimit ) {
     this.cursorId = 0;          // set once results start arriving, cleared when done
     this.docs = null;           // the array of matching documents
 return this;
+
+    var self = this;
+    qInfo.cb = function(err, docs, cursorId) { self._refill(err, docs, cursorId) };
+}
+QueryReply.prototype._refill = function _refill( err, docs, cursorId ) {
+    if (!this.cursorId) this.cursorId = cursorId;
+    if (err) this.close();
+    else if (docs) {
+        if (!this.docs) this.docs = docs;
+        else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
+        this.fetchLimit -= docs.length;
+    }
+    if (this.fetchLimit <= 0) this.close();
+}
+// close the query to free the cursor memory on the server
+QueryReply.prototype.close = function close( ) {
+    if (this.cursorId) {
+        this.qm.opKillCursors(this.cursorId);
+        this.cursorId = 0;
+        // already fetched documents are not cleared, so it`s possible
+        // to keep fetching items from a closed cursor.  This way we can
+        // close the cursor as soon as we got the last batch.
+    }
+}
+// fetch the next item from the result set
+QueryReply.prototype.fetch = function fetch( cb ) {
+    var self = this;
+    if (this.docs.length) {
+        // TODO: prefetch next batch when running low on items?
+        var doc = this.docs.shift();
+        if (!this.docs.length) this.docs = null;
+        return cb(null, doc);
+    }
+
+    // if out of data and no way to fetch more, indicate done with null
+    if (!this.cursorId) return cb(null, null);
+
+    this.qm.opGetMore(
+        this.ns, this.getFetchLimit(), this.cursorId,
+        function(err, docs, cursorId) {
+            self._refill(err, docs, cusorId);
+            return self.fetch(cb);
+        }
+    );
+}
+QueryReply.prototype.fetchBatch = function fetchBatch( batchSize ) {
+// TODO: writeme: fetch this many elements from the result stream
+}
+QueryReply.prototype.getFetchLimit = function getFetchLimit( ) {
+    return (this.fetchLimit < this.batchSize) ? this.fetchLimit : this.batchSize;
 }
 // fetch all remaining items in the result set
 QueryReply.prototype.toArray = function toArray( callback ) {
     this.qInfo.cb = callback;
+return this;
+
+    this.clientCb = callback;
+    var self = this;
+    var ret = null;
+    this.qInfo.cb = function refill(err, docs, cursorId) {
+        self._refill(err, docs, cursorId);
+        if (err) return self.clientCb(err);
+        if (this.cursorId) self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, refill);
+        else {
+            var docs = self.docs;
+            self.docs = null;
+            return self.clientCb(null, docs);
+        }
+    }
 }
 QueryReply.prototype.nextObject = QueryReply.prototype.fetch;
 QueryReply.prototype.batchSize = function batchSize( length ) {
     this.batchSize = batchSize;
-// FIXME: stuff the batchSize into this.qInfo.bson as the query limit
     return this;
 }
 QueryReply.prototype = QueryReply.prototype;
