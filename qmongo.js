@@ -31,6 +31,11 @@ var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
 var getBsonEntities = qbson.decode.getBsonEntities;     // bson_decode of mongodump concat data
 var encodeEntities = qbson.encode.encodeEntities;       // bson_encode into buffer
+function putStringZ( str, buf, offset ) {
+    offset = utf8.encodeUtf8Overlong(str, 0, str.length, buf, offset);
+    buf[offset++] = 0;
+    return offset;
+}
 
 /*
  * the q mongo client.  It can make queries itself, or return db and
@@ -49,7 +54,7 @@ function QMongo( socket, options ) {
 
     this.dbName = options.database || 'test';
     this.collectionName = options.collection || 'test';
-    this.batchSize = options.batchSize || 400;
+    this.batchSize = options.batchSize || 5000;
     this._closed = false;
     this._deliverRunning = false;
 // TODO: rename _pendingRepliesCount, and only increment if a reply is expected (ie opQuery and opGetMore)
@@ -119,15 +124,20 @@ QMongo.connect = function connect( url, options, callback ) {
     var parts = url.match(connectionPattern);
     if (!parts) throw new Error("invalid mongo connection string");
     var options = {
+        // parsed options
         username: parts[2],
         password: parts[4],
         hostname: parts[5],
         port: parts[7] || 27017,
         database: parts[9],
+        // user-provided options
+        allowHalfOpen: options.allowHalfOpen !== undefined ? options.allowHalfOpen : true,
+        batchSize: options.batchSize || 5000,
+        // built-in options
+        // TODO: expose some of these built-ins, allow the user to override
         retryInterval: 10,      // try to reconnect every 1/100 sec
         retryLimit: 200,        // for up to 2 sec
         retryCount: 0,
-        allowHalfOpen: true,
     };
 
     // TODO: parse multiple host:port,host2:port2 params (to use the first)
@@ -163,7 +173,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     socket.on('data', function(chunk) {
         // gather the data and try to deliver.  mutexes and pacing in the delivery func
         qmongo.qbuf.write(chunk);
-        setImmediate(deliverRepliesQ, qmongo, qmongo.qbuf);
+        setImmediate(deliverReplies, qmongo, qmongo.qbuf);
     });
 
     // catch socket errors else eg ECONNREFUSED is fatal
@@ -455,8 +465,12 @@ return this;
     var ret = null;
     this.qInfo.cb = function refill(err, docs, cursorId) {
         self._refill(err, docs, cursorId);
-        if (err) return self.clientCb(err);
-        if (this.cursorId) self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, refill);
+        if (err) {
+            return self.clientCb(err);
+        }
+        else if (self.cursorId) {
+            return self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, refill);
+        }
         else {
             var docs = self.docs;
             self.docs = null;
@@ -556,7 +570,7 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 
 // TODO: make this a method?
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
-function deliverRepliesQ( qmongo, qbuf ) {
+function deliverReplies( qmongo, qbuf ) {
     var handledCount = 0;
     var limit = 4;                              // how many replies to process before yielding the cpu
 
@@ -569,7 +583,7 @@ function deliverRepliesQ( qmongo, qbuf ) {
     for (;;) {
         // yield to the event loop after limit replies, and schedule the remaining work
         if (handledCount >= limit) {
-            setImmediate(function(){ deliverRepliesQ(qmongo, qbuf) });
+            setImmediate(function(){ deliverReplies(qmongo, qbuf) });
             break;
         }
 
@@ -590,6 +604,7 @@ function deliverRepliesQ( qmongo, qbuf ) {
 
         // find the callback that gets this reply.  Need to know if to decode `raw`
         var qInfo = qmongo.callbacks[header.responseTo];
+// TODO: do not clear callback if exhausting the cursor
         if (qInfo) qmongo.callbacks[header.responseTo] = 0;
         else {
             // TODO: handle this better, maybe emit 'warning'
@@ -741,7 +756,9 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
         if (n >= expect) {
             var t2 = Date.now();
             console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
+            console.log("AR: toArray returned %d docs", docs.length);
             console.log("AR:", process.memoryUsage());
+            assert.equal(docs.length, limit);
 //console.log("AR: got", docs[0], qbson.decode(docs[0]));
             db.close();
 console.log("AR:", process.memoryUsage());
