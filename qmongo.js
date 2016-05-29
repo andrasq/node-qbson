@@ -50,8 +50,7 @@ function QMongo( socket, options ) {
 
     this.dbName = options.database || 'test';
     this.collectionName = options.collection || 'test';
-    // NOTE: this version fetches just one batch, the entire result set must fit.
-    this.batchSize = options.batchSize || 0x7FFFFFFF;
+    this.batchSize = options.batchSize || 10000;
     this._closed = false;
     this._deliverRunning = false;
 // TODO: rename _pendingRepliesCount, and only increment if a reply is expected (ie opQuery and opGetMore)
@@ -734,7 +733,7 @@ var assert = require('assert');
 var mongo = QMongo;
 //var mongo = require('mongodb').MongoClient;
 
-mongo.connect("mongodb://@localhost/", function(err, db) {
+mongo.connect("mongodb://@localhost", {batchSize: 5000}, function(err, db) {
     if (err) throw err;
     var n = 0;
     var t1 = Date.now();
