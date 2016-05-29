@@ -144,6 +144,7 @@ QMongo.connect = function connect( url, options, callback ) {
     // TODO: parse ?options name=value,name2=value2 pairs, extract w, timeout, etc values
     // TODO: make reconnect retryLimit (0 to disable) externally configurable
 
+// TODO: should pass in the connection getter, more modular
     QMongo._reconnect(new QMongo(), options, callback);
 };
 // TODO: emit events? esp 'error', maybe 'disconnect'
@@ -258,33 +259,22 @@ Collection.prototype = Collection.prototype;
 
 
 
+/*
 // append a find command to the query queue
 // the query queue meters the requests, and better supports a reconnect
+//
+// TODO: consider how to return an array to the callback of find, but also use it as a Cursor
+// TODO: we would like toArray to set the EXHAUST flag on the query about to be sent
+// (that would need the callback to be left registered until got a zero cursorId)
+ */
 QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
     var ns = _ns || this.dbName + '.' + this.collectionName;
-// TODO: impose our own default limit eg 10000 unless a higher one is specified
-    var limit = options.limit || 0x7FFFFFFF;
+    var queryLimit = options.limit || this.batchSize;
+    if (queryLimit > this.batchSize) queryLimit = this.batchSize;
 
-    // TODO: factor this out as qm.opQuery(query, fields, skip, limit, cb)
-    var qInfo;
-    this.queryQueue.push(qInfo = {
-        cb: callback || _noop,
-        raw: options.raw,
-        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, limit),
-    });
-
-// TODO: consider how to return an array to the callback of find, but also
-// make it possible to use as a cursor (bachSize, toArray and fetch/nextObject)
-// TODO: we would like toArray to set the EXHAUST flag on the query about to be sent
-// (that would need the callback to be left registered until got a zero cursorId)
-
-    this.scheduleQuery();
-    return new Cursor(qInfo, this, ns, limit);
-
-    // TODO: need an actual cursor to stream results of a complex sort
-    // For now, batch large datasets explicitly.
+    return this.opQuery(options, ns, options.skip || 0, queryLimit, query, options.fields, callback)
 }
 
 // send more calls to the db server
@@ -335,6 +325,7 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
     putInt32(arguments.length, bson, 20);
     for (var i=0; i<arguments.length; i++) arguments[i].put(bson, 20 + 8*i);
 
+    var qInfo;
     this.queryQueue.push(qInfo = {
         cb: null,
         bson: bson
@@ -342,21 +333,24 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
     this.scheduleQuery();
 }
 
-QMongo.prototype.opQuery = function opQuery( options, ns, skip, fetchLimit, query, fields, cb ) {
+QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fields, callback ) {
     // TODO: normalize query sizes for easier reuse?
     var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
         qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
+    // TODO: move the work of buildQuery in here
+    var bson = buildQuery(0, ns, query, fields, skip, limit);
 
-    var qInfo, limit = (fetchLimit > this.batchSize) ? this.batchSize : fetchLimit;
+    var qInfo;
     this.queryQueue.push(qInfo = {
-        cb: cb,
+        cb: callback || _noop,
         raw: options.raw,
-        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, limit),
+        exhaust: false,
+        bson: bson,
     });
-    _setOptionFlags(options, qInfo.bson, 16);
+    _setOptionFlags(options, bson, 16);
 
     this.scheduleQuery();
-    return new Cursor(qInfo, this, ns, fetchLimit);
+    return new Cursor(qInfo, this, ns, options.limit || Infinity);
 }
 
 function _setOptionFlags( options, bson, offset) {
@@ -372,16 +366,15 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, callback )
     // TODO: normalize query sizes for easier reuse?
     var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
 
-    putInt32(0, bson, 16);      // ZERO
-    // Q: why does getMore need the namespace?  (caches cursors per ns?)
-    var offset = utf8.encodeUtf8Overlong(ns, bson, 20);
-    bson[offset++] = 0;
-    offset = putInt32(limit, bson, offset);
-    offset = cursorId.put(bson, offset);
+    putInt32(0, bson, 16);                      // ZERO
+    var offset = putStringZ(ns, bson, 20);      // get_more needs the namespace - why?
+    putInt32(limit, bson, offset);              // limit
+    offset = cursorId.put(bson, offset+4);      // cursor Id
 
     // id -1 as a placeholder, responseTo 0
     encodeHeader(bson, 0, offset, -1, 0, OP_GET_MORE);
 
+    var qInfo;
     this.queryQueue.push(qInfo = {
         cb: callback,
         bson: bson
