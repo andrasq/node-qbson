@@ -123,29 +123,30 @@ QMongo.connect = function connect( url, options, callback ) {
     if (!callback) { callback = options; options = {} }
     var parts = url.match(connectionPattern);
     if (!parts) throw new Error("invalid mongo connection string");
-    var options = {
+    var connectOptions = {
         // parsed options
         username: parts[2],
         password: parts[4],
         hostname: parts[5],
         port: parts[7] || 27017,
         database: parts[9],
-        // user-provided options
-        allowHalfOpen: options.allowHalfOpen !== undefined ? options.allowHalfOpen : true,
-        batchSize: options.batchSize || 5000,
         // built-in options
         // TODO: expose some of these built-ins, allow the user to override
         retryInterval: 10,      // try to reconnect every 1/100 sec
         retryLimit: 200,        // for up to 2 sec
         retryCount: 0,
+        // user-provided options
+        allowHalfOpen: options.allowHalfOpen !== undefined ? options.allowHalfOpen : true,
+    };
+    var mongoOptions = {
+        batchSize: options.batchSize,
     };
 
     // TODO: parse multiple host:port,host2:port2 params (to use the first)
     // TODO: parse ?options name=value,name2=value2 pairs, extract w, timeout, etc values
     // TODO: make reconnect retryLimit (0 to disable) externally configurable
 
-// TODO: should pass in the connection getter, more modular
-    QMongo._reconnect(new QMongo(), options, callback);
+    QMongo._reconnect(new QMongo(null, mongoOptions), connectOptions, callback);
 };
 // TODO: emit events? esp 'error', maybe 'disconnect'
 
@@ -563,6 +564,7 @@ function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
 
 // TODO: make this a method?
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
+// TODO: this function is not getting optimized -- fix or work around
 function deliverReplies( qmongo, qbuf ) {
     var handledCount = 0;
     var limit = 4;                              // how many replies to process before yielding the cpu
@@ -690,6 +692,7 @@ function decodeReply( buf, base, bound, raw ) {
     while (base < bound) {
         var obj, len = getUInt32(buf, base);
         // return a complete bson object if raw, or decode faster without buf.slice to object
+// TRY: re-time whether decoding as a separate step is any slower
         var obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
         reply.documents.push(obj);
         base += len;
