@@ -147,6 +147,10 @@ QMongo.connect = function connect( url, options, callback ) {
 };
 // TODO: emit events? esp 'error', maybe 'disconnect'
 
+QMongo.prototype.isConnected = function isConnected( ) {
+    return this.socket ? true : false;
+}
+
 // TODO: move into wire.js
 QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
     if (qmongo._closed) return callback(new Error("connection closed"));
@@ -180,7 +184,7 @@ QMongo._reconnect = function _reconnect( qmongo, options, callback ) {
         // on socket error terminate all calls waiting for replies and reconnect
         // first mark the connection _closed to prevent the callbacks from reusing it
         if (qmongo) {
-            qmongo.socket = null;
+            qmongo.socket = null;       // socket also signals that is connected
             qmongo.close();
             qmongo._error(err);
         }
@@ -350,7 +354,9 @@ QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fi
     _setOptionFlags(options, bson, 16);
 
     this.scheduleQuery();
-    return new Cursor(qInfo, this, ns, options.limit || Infinity);
+    var cursor = new Cursor(qInfo, this, ns, options.limit || Infinity);
+    if (callback) callback(null, cursor);
+    return cursor;
 }
 
 function _setOptionFlags( options, bson, offset) {
