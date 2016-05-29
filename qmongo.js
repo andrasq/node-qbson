@@ -311,6 +311,75 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     }
 }
 
+QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
+    var bson = new Buffer(16 + 8 + 8 * arguments.length);
+    // header
+    putInt32(bson.length, bson, 0);
+    //putInt32(0, bson, 4);     // reqId, filled in by scheduleQuery
+    putInt32(0, bson, 8);       // responseTo
+    putInt32(OP_KILL_CURSORS, bson, 12);
+
+    // OP_KILL_CURSORS struct: header, ZERO, cursorCount, [cursors]
+    putInt32(0, bson, 16);
+    putInt32(arguments.length, bson, 20);
+    for (var i=0; i<arguments.length; i++) arguments[i].put(bson, 20 + 8*i);
+
+    this.queryQueue.push(qInfo = {
+        cb: null,
+        bson: bson
+    });
+    this.scheduleQuery();
+}
+
+QMongo.prototype.opQuery = function opQuery( options, ns, skip, fetchLimit, query, fields, cb ) {
+    // TODO: normalize query sizes for easier reuse?
+    var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
+        qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
+
+    var qInfo, limit = (fetchLimit > this.batchSize) ? this.batchSize : fetchLimit;
+    this.queryQueue.push(qInfo = {
+        cb: cb,
+        raw: options.raw,
+        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, limit),
+    });
+    _setOptionFlags(options, qInfo.bson, 16);
+
+    this.scheduleQuery();
+    return new QueryReply(qInfo, this, ns, fetchLimit);
+}
+
+function _setOptionFlags( options, bson, offset) {
+    // all 7 query flags go into the same byte
+    if (options.tailableCursor) bson[offset] |= FL_Q_TAILABLE_CURSOR;
+    if (options.slaveOk) bson[offset] |= FL_Q_SLAVE_OK;
+    if (options.awaitData) bson[offset] |= FL_Q_WAIT_DATA;
+    // FL_Q_EXHAUST
+    // FL_Q_PARTIAL
+}
+
+QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, callback ) {
+    // TODO: normalize query sizes for easier reuse?
+    var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
+
+    putInt32(0, bson, 16);      // ZERO
+    // Q: why does getMore need the namespace?  (caches cursors per ns?)
+    var offset = utf8.encodeUtf8Overlong(ns, bson, 20);
+    bson[offset++] = 0;
+    offset = putInt32(limit, bson, offset);
+    offset = cursorId.put(bson, offset);
+
+    // id -1 as a placeholder, responseTo 0
+    encodeHeader(bson, 0, offset, -1, 0, OP_GET_MORE);
+
+    this.queryQueue.push(qInfo = {
+        cb: callback,
+        bson: bson
+    });
+    this.scheduleQuery();
+}
+
+
+// TODO: pass in the clientCb, do not bake it into qInfo.
 function QueryReply( qInfo, qm, ns, fetchLimit ) {
     this.qInfo = qInfo;
     this.qm = qm;
