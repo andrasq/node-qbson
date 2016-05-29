@@ -3,9 +3,10 @@
 'use strict';
 
 module.exports = QMongo;
+// TODO: rename classes QmDb, QmCollection, QmCursor for better traceability
 module.exports.Db = Db;                         // type returned by qmongo.db()
 module.exports.Collection = Collection;         // type returned by qmongo.db().collection()
-module.exports.Cursor = null;                   // placeholder for find()
+module.exports.Cursor = Cursor;                 // type returned by find()
 module.exports.MongoError = MongoError;
 
 // TODO: factor out the callbacked primitives
@@ -270,7 +271,7 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
 // (that would need the callback to be left registered until got a zero cursorId)
 
     this.scheduleQuery();
-    return new QueryReply(qInfo, this, ns, limit);
+    return new Cursor(qInfo, this, ns, limit);
 
     // TODO: need an actual cursor to stream results of a complex sort
     // For now, batch large datasets explicitly.
@@ -345,7 +346,7 @@ QMongo.prototype.opQuery = function opQuery( options, ns, skip, fetchLimit, quer
     _setOptionFlags(options, qInfo.bson, 16);
 
     this.scheduleQuery();
-    return new QueryReply(qInfo, this, ns, fetchLimit);
+    return new Cursor(qInfo, this, ns, fetchLimit);
 }
 
 function _setOptionFlags( options, bson, offset) {
@@ -380,7 +381,7 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, callback )
 
 
 // TODO: pass in the clientCb, do not bake it into qInfo.
-function QueryReply( qInfo, qm, ns, fetchLimit ) {
+function Cursor( qInfo, qm, ns, fetchLimit ) {
     this.qInfo = qInfo;
     this.qm = qm;
     this.ns = ns;
@@ -397,7 +398,7 @@ return this;
     var self = this;
     qInfo.cb = function(err, docs, cursorId) { self._refill(err, docs, cursorId) };
 }
-QueryReply.prototype._refill = function _refill( err, docs, cursorId ) {
+Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
     if (!this.cursorId) this.cursorId = cursorId;
     if (err) this.close();
     else if (docs) {
@@ -408,7 +409,7 @@ QueryReply.prototype._refill = function _refill( err, docs, cursorId ) {
     if (this.fetchLimit <= 0) this.close();
 }
 // close the query to free the cursor memory on the server
-QueryReply.prototype.close = function close( ) {
+Cursor.prototype.close = function close( ) {
     if (this.cursorId) {
         this.qm.opKillCursors(this.cursorId);
         this.cursorId = 0;
@@ -418,7 +419,7 @@ QueryReply.prototype.close = function close( ) {
     }
 }
 // fetch the next item from the result set
-QueryReply.prototype.fetch = function fetch( cb ) {
+Cursor.prototype.fetch = function fetch( cb ) {
     var self = this;
     if (this.docs.length) {
         // TODO: prefetch next batch when running low on items?
@@ -438,14 +439,14 @@ QueryReply.prototype.fetch = function fetch( cb ) {
         }
     );
 }
-QueryReply.prototype.fetchBatch = function fetchBatch( batchSize ) {
+Cursor.prototype.fetchBatch = function fetchBatch( batchSize ) {
 // TODO: writeme: fetch this many elements from the result stream
 }
-QueryReply.prototype.getFetchLimit = function getFetchLimit( ) {
+Cursor.prototype.getFetchLimit = function getFetchLimit( ) {
     return (this.fetchLimit < this.batchSize) ? this.fetchLimit : this.batchSize;
 }
 // fetch all remaining items in the result set
-QueryReply.prototype.toArray = function toArray( callback ) {
+Cursor.prototype.toArray = function toArray( callback ) {
     this.qInfo.cb = callback;
 return this;
 
@@ -463,12 +464,12 @@ return this;
         }
     }
 }
-QueryReply.prototype.nextObject = QueryReply.prototype.fetch;
-QueryReply.prototype.batchSize = function batchSize( length ) {
+Cursor.prototype.nextObject = Cursor.prototype.fetch;
+Cursor.prototype.batchSize = function batchSize( length ) {
     this.batchSize = batchSize;
     return this;
 }
-QueryReply.prototype = QueryReply.prototype;
+Cursor.prototype = Cursor.prototype;
 
 // expose runCommand on the underlying qm object as well, runs against the qm.dbName db
 QMongo.prototype.runCommand = Db.prototype.runCommand;
