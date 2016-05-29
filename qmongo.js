@@ -106,6 +106,11 @@ function MongoError(){
 }
 util.inherits(MongoError, Error);
 
+function maybeCallback( callback, err, ret ) {
+    if (callback) callback(err, ret);
+    else if (err) throw err;
+    else return ret;
+}
 
 // mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
 // we currently support mongodb://[username:password@]hostname[:port][/[database]]
@@ -271,7 +276,9 @@ Collection.prototype = Collection.prototype;
  */
 QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
-    if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
+    if (options.fields && typeof options.fields !== 'object') {
+        return maybeCallback(callback, new Error("fields must be an object"));
+    }
     var ns = _ns || this.dbName + '.' + this.collectionName;
     var queryLimit = options.limit || this.batchSize;
     if (queryLimit > this.batchSize) queryLimit = this.batchSize;
@@ -314,6 +321,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     }
 }
 
+// TODO: push onto killCursorsQueue to batch and flush 20x per second
 QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
     var bson = new Buffer(16 + 8 + 8 * arguments.length);
 
@@ -337,11 +345,11 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
     this.scheduleQuery();
 }
 
+// TODO: normalize query sizes for easier reuse?
+// TODO: move the work of buildQuery in here
+// var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
+//     qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
 QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fields, callback ) {
-    // TODO: normalize query sizes for easier reuse?
-    // TODO: move the work of buildQuery in here
-    // var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
-    //     qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
     var bson = buildQuery(0, ns, query, fields, skip, limit);
 
     var qInfo;
@@ -390,7 +398,6 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callb
 }
 
 
-// TODO: pass in the clientCb, do not bake it into qInfo.
 function Cursor( qInfo, qm, ns, fetchLimit ) {
     this.qInfo = qInfo;
     this.qm = qm;
@@ -400,23 +407,21 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
     this.fetchLimit = fetchLimit;
 
     this.batchSize = this.qm.batchSize;
-    this.clientCb = qInfo.cb;   // callback to deliver the results
     this.cursorId = 0;          // set once results start arriving, cleared when done
     this.docs = null;           // the array of matching documents
-return this;
 
     var self = this;
     qInfo.cb = function(err, docs, cursorId) { self._refill(err, docs, cursorId) };
 }
 Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
-    if (!this.cursorId) this.cursorId = cursorId;
-    if (err) this.close();
-    else if (docs) {
-        if (!this.docs) this.docs = docs;
+    this.cursorId = cursorId;   // if cursor still live
+    if (!docs) this.close();    // docs only if no error
+    else {
+        if (!this.docs) this.docs = docs;       // first batch
         else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
         this.fetchLimit -= docs.length;
+        if (!this.fetchLimit) this.close();
     }
-    if (this.fetchLimit <= 0 || !cursorId) this.close();
 }
 // close the query to free the cursor memory on the server
 Cursor.prototype.close = function close( ) {
@@ -431,7 +436,7 @@ Cursor.prototype.close = function close( ) {
 // fetch the next item from the result set
 Cursor.prototype.fetch = function fetch( cb ) {
     var self = this;
-    if (this.docs.length) {
+    if (this.docs && this.docs.length) {
         // TODO: prefetch next batch when running low on items?
         var doc = this.docs.shift();
         if (!this.docs.length) this.docs = null;
@@ -457,36 +462,17 @@ Cursor.prototype.getFetchLimit = function getFetchLimit( ) {
 }
 // fetch all remaining items in the result set
 Cursor.prototype.toArray = function toArray( callback ) {
-    this.qInfo.cb = callback;
-return this;
-
-    this.clientCb = callback;
-    var ret = null;
-    var batches = new Array();
-    var count = 0;
-    if (this.docs) {
-        count = this.docs.length;
-        batches.push(this.docs);
-        this.docs = null;
-    }
-    var self = this;
+    var self = this, fetchLimit = self.fetchLimit;
     this.qInfo.cb = function refill(err, docs, cursorId) {
+       if (docs && docs.length >= fetchLimit) {
+            // fast path: single batch, no errors
+            self.close();
+            return callback(null, docs);
+        }
         self._refill(err, docs, cursorId);
-        if (docs) {
-            batches.push(docs);
-            count += docs.length;
-            self.docs = null;
-        }
-        if (err) {
-            return self.clientCb(err);
-        }
-        else if (self.cursorId) {
-            return self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, self.qInfo.raw, refill);
-        }
-        else {
-            var docs = concatArrays(batches);
-            return self.clientCb(null, docs);
-        }
+        if (err) return callback(err);
+        else if (self.cursorId) self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, self.qInfo.raw, refill);
+        else return callback(null, self.docs);
     }
 }
 Cursor.prototype.nextObject = Cursor.prototype.fetch;
@@ -498,16 +484,6 @@ Cursor.prototype = Cursor.prototype;
 
 // expose runCommand on the underlying qm object as well, runs against the qm.dbName db
 QMongo.prototype.runCommand = Db.prototype.runCommand;
-
-function concatArrays( arrays ) {
-    var arr = new Array();
-    for (var i=0; i<arrays.length; i++) {
-        for (var j=0; j<arrays[i].length; j++) {
-            arr.push(arrays[i][j]);
-        }
-    }
-    return arr;
-}
 
 // compute the hex md5 checksum
 function md5sum( str ) {
@@ -636,7 +612,7 @@ function deliverReplies( qmongo, qbuf ) {
 
         // decode the reply itself, retrieve and decode the returned documents
         var reply = decodeReply(buf, 16, buf.length, qInfo.raw);
-        var docs = reply.documents;
+        var docs = reply.documents;     // always an array
         var err = null;
         if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
             if (reply.responseFlags & FL_R_QUERY_FAILURE) {
@@ -648,14 +624,14 @@ function deliverReplies( qmongo, qbuf ) {
                 for (var k in reply.error) err[k] = reply.error[k];
             }
             else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
-                reply.error = new MongoError('CursorNotFound');
+                var err = new MongoError('CursorNotFound');
                 docs = null;
-                err = reply.error;
             }
         }
 
         // dispatch reply to its callback
         qInfo.cb(err, docs, reply.cursorId);
+
         qmongo._runningCallsCount -= 1;
         handledCount += 1;
         qmongo._responseCount += 1;
