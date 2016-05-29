@@ -147,13 +147,14 @@ function Long( lowWord, highWord ) {
     this.low32 = lowWord;
     this.high32 = highWord;
 }
-Long.prototype.put = function get( buf, base ) {
+Long.prototype.get = function get( buf, base ) {
     this.low32 = bytes.getUInt32(buf, base);
     this.high32 = bytes.getUInt32(buf, base+4);
 }
-Long.prototype.put = function get( buf, base ) {
-    bytes.putInt32(this.low32, buf, base);
-    bytes.putInt32(this.high32, buf, base+4);
+Long.prototype.put = function put( buf, offset ) {
+    bytes.putInt32(this.low32, buf, offset);
+    bytes.putInt32(this.high32, buf, offset+4);
+    return offset + 8;
 }
 Long.prototype = Long.prototype;
 
