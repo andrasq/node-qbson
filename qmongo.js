@@ -285,11 +285,17 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     return this.opQuery(options, ns, options.skip || 0, queryLimit, query, options.fields, callback)
 }
 
+QMongo.prototype.killCursor = function killCursor( cursorId ) {
+    // Note: no benefit to batching cursors sent to opKillCursor
+    if (cursorId) this.opKillCursors(cursorId);
+}
+
 // send more calls to the db server
 QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     var qInfo, id;
     // TODO: make the concurrent call limit configurable,
     // best value depends on how much latency is being spanned
+    // 10% faster with 300 if making 50k concurrent calls, 25% for 500k
     while (this._runningCallsCount < 3 && (qInfo = this.queryQueue.shift())) {
         // TODO: no reason why the queued queries cant be retried after a reconnect
         if (this._closed) return qInfo.cb(new Error("connection closed"));
@@ -321,8 +327,9 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
 }
 
 // TODO: push onto killCursorsQueue to batch and flush 20x per second
-QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
+QMongo.prototype.opKillCursors = function opKillCursors( cursors ) {
     var bson = new Buffer(16 + 8 + 8 * arguments.length);
+    cursors = Array.isArray(cursors) ? cursors : arguments;
 
     // header: total length, reqId, repsonseTo, opCode
     putInt32(bson.length, bson, 0);
@@ -332,9 +339,9 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursor1, cursor2 ) {
 
     // opKillCursors: ZERO, cursorCount, cursorIds back-to-back
     putInt32(0, bson, 16);
-    putInt32(arguments.length, bson, 20);
-    for (var i=0; i<arguments.length; i++) {
-        arguments[i].put(bson, 24 + 8*i);
+    putInt32(cursors.length, bson, 20);
+    for (var i=0; i<cursors.length; i++) {
+        cursors[i].put(bson, 24 + 8*i);
     }
 
     this.queryQueue.push(/*qInfo =*/ {
@@ -425,7 +432,7 @@ Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
 // close the query to free the cursor memory on the server
 Cursor.prototype.close = function close( ) {
     if (this.cursorId) {
-        this.qm.opKillCursors(this.cursorId);
+        this.qm.killCursor(this.cursorId);
         this.cursorId = 0;
         // already fetched documents are not cleared, so it`s possible
         // to keep fetching items from a closed cursor.  This way we can
@@ -738,8 +745,8 @@ mongo.connect("mongodb://@localhost", {batchSize: 5000}, function(err, db) {
     var n = 0;
     var t1 = Date.now();
     // caution: 1e6 pending calls crashed my mongod!
-    var nloops = 5000;
-    var limit = 200;
+    var nloops = 50000;
+    var limit = 20;
     var expect = nloops * limit;
     // caution: mongodb needs `true`, mongo server accepts `1`
     var options = { limit: limit, raw: true };
