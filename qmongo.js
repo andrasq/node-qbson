@@ -94,6 +94,10 @@ var FL_R_QUERY_FAILURE = 2;     // QueryFailure response flag
 var FL_R_SHARD_CONFIG_STALE = 4; // internal
 var FL_R_AWAIT_CAPABLE = 8;     // always set mongo v1.6 and above
 
+
+function _noop() {
+}
+
 function MongoError(){
     Error.call(this);
 }
@@ -249,13 +253,22 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     if (!callback && typeof options === 'function') { callback = options; options = {}; }
     if (options.fields && typeof options.fields !== 'object') return callback(new Error("fields must be an object"));
     var ns = _ns || this.dbName + '.' + this.collectionName;
+// TODO: impose our own default limit eg 10000 unless a higher one is specified
+    var limit = options.limit || 0x7FFFFFFF;
+
+    // TODO: factor this out as qm.opQuery(query, fields, skip, limit, cb)
     var qInfo;
     this.queryQueue.push(qInfo = {
-        cb: callback,
+        cb: callback || _noop,
         raw: options.raw,
-        // TODO: impose our own default limit unless higher is specified
-        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, options.limit || 0x7FFFFFFF),
+        bson: buildQuery(0, ns, query, options.fields, options.skip || 0, limit),
     });
+
+// TODO: consider how to return an array to the callback of find, but also
+// make it possible to use as a cursor (bachSize, toArray and fetch/nextObject)
+// TODO: we would like toArray to set the EXHAUST flag on the query about to be sent
+// (that would need the callback to be left registered until got a zero cursorId)
+
     this.scheduleQuery();
     return new QueryReply(qInfo);
 
@@ -263,7 +276,7 @@ QMongo.prototype.find = function find( query, options, callback, _ns ) {
     // For now, batch large datasets explicitly.
 }
 
-// launch more find calls
+// send more calls to the db server
 QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     var qInfo, id;
     // TODO: make the concurrent call limit configurable,
@@ -282,12 +295,19 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
 
         // send the query on its way
         // data is actually transmitted only after we already installed the callback handler
-        this.socket.write(qInfo.bson);
+        var bson = qInfo.bson, len = getUInt32(qInfo.bson, 0);
+        if (len < bson.length) bson = bson.slice(0, len);
+        this.socket.write(bson);
+        if (bson[12] === (OP_QUERY & 0xFF) || bson[12] === (OP_GET_MORE & 0xFF)) this._runningCallsCount += 1;
         qInfo.bson = 'sent';
-        this.callbacks[id] = qInfo;
-        this.sentIds.push(id);
-        this._runningCallsCount += 1;
+
+        // not all ops expect (or get) a reply.
+        if (qInfo.cb) {
+            this.callbacks[id] = qInfo;
+            this.sentIds.push(id);
+        }
         // TODO: should try to yield between passes to interleave with replies
+// TODO: time out queries (callbacks) that take too long.
     }
 }
 
@@ -339,24 +359,25 @@ QMongo.prototype = QMongo.prototype;
 
 
 // return a request id that is not used by any of the current calls
+// CAUTION:  returns a monotonically increasing integer 1..2^32-1,
+// then repeats.  Ids will overlap after 4 billion requests.
 // TODO: should be per object (per socket, actually)
-// simplest to use integers, a binary string eg "\x00\x01\x02" is 37% slower
-// note: 5% penalty for large numbers as ids (ie, million+)
+// Simplest to use integers, a binary string eg "\x00\x01\x02" is 37% slower.
+// Large numbers (millions) are 5% slower than small numbers (under 16k).
 var _lastRequestId = 0;
-function _makeRequestId( ) {    
-    return ++_lastRequestId;
+function _makeRequestId( ) {
+    _lastRequestId = (_lastRequestId + 1) & 0xFFFFFFFF;
+    return _lastRequestId || (_lastRequestId = 1);
 }
 
 
 
 function buildQuery( reqId, ns, query, fields, skip, limit ) {
     // allocate a buffer to hold the query
-    // TODO: keep buffers of the common sizes on free lists
     var szQuery = qbson.encode.guessSize(query);
     var szFields = qbson.encode.guessSize(fields);
     var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;;
-    // normalize query sizes for easier reuse (TODO: maintain own free list)
-    if (bufSize < 1000) bufSize = 1000;
+    // TODO: normalize query sizes for easier reuse?
     var msg = new Buffer(bufSize);
 
     // build the query
@@ -368,11 +389,10 @@ function buildQuery( reqId, ns, query, fields, skip, limit ) {
     offset = putInt32(limit, msg, offset);         // limit
     offset = qbson.encode.encodeEntities(query, msg, offset);   // query
     if (fields) offset = qbson.encode.encodeEntities(fields, msg, offset);  // fields
-    msg = msg.slice(0, offset);
 
     // encode the header once the final size is known
     // zero out respTo to keep mongo happy
-    offset = encodeHeader(msg, 0,  offset, reqId, 0, OP_QUERY);
+    encodeHeader(msg, 0,  offset, reqId, 0, OP_QUERY);
 
     return msg;
 }
@@ -447,14 +467,6 @@ function deliverRepliesQ( qmongo, qbuf ) {
                 docs = null;
                 err = reply.error;
             }
-        }
-
-        // FIXME: clean up: if got limit docs but there is a cursor too, close the cursor
-        if (docs.length >= qInfo.limit && reply.cursorId) {
-            // cursor is left open because the wire protocol has no way to indicate
-            // whether the query was the first batch of many, or the entire result set.
-            // qm.opKillCursors(reply.cursorId);
-            // where closeCursor has a pre-prepared command template, pokes the cursor id, and writes it ;-)
         }
 
         // dispatch reply to its callback
@@ -582,6 +594,7 @@ mongo.connect("mongodb://@localhost/", function(err, db) {
             var t2 = Date.now();
             console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
             console.log("AR:", process.memoryUsage());
+//console.log("AR: got", docs[0], qbson.decode(docs[0]));
             db.close();
 console.log("AR:", process.memoryUsage());
 //console.log("AR:", db);
