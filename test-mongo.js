@@ -81,6 +81,21 @@ struct OP_REPLY {
     document* documents;      // documents
 }
 
+struct OP_GET_MORE {
+    MsgHeader header;             // standard message header
+    int32     ZERO;               // 0 - reserved for future use
+    cstring   fullCollectionName; // "dbname.collectionname"
+    int32     numberToReturn;     // number of documents to return
+    int64     cursorID;           // cursorID from the OP_REPLY
+}
+
+struct OP_KILL_CURSORS {
+    MsgHeader header;            // standard message header
+    int32     ZERO;              // 0 - reserved for future use
+    int32     numberOfCursorIDs; // number of cursorIDs in message
+    int64*    cursorIDs;         // sequence of cursorIDs to close
+}
+
 **/
 
 
