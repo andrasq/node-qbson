@@ -298,8 +298,10 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     // 10% faster with 300 if making 50k concurrent calls, 25% for 500k
     while (this._runningCallsCount < 3 && (qInfo = this.queryQueue.shift())) {
         // TODO: no reason why the queued queries cant be retried after a reconnect
-        if (this._closed) return qInfo.cb(new Error("connection closed"));
-        if (!this.socket) return qInfo.cb(new Error("not connected"));
+        if (qInfo.cb) {
+            if (this._closed) return qInfo.cb(new Error("connection closed"));
+            if (!this.socket) return qInfo.cb(new Error("not connected"));
+        }
 
         id = _makeRequestId();
         putInt32(id, qInfo.bson, 4);
@@ -312,7 +314,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
         // data is actually transmitted only after we already installed the callback handler
         var bson = qInfo.bson, len = getUInt32(qInfo.bson, 0);
         if (len < bson.length) bson = bson.slice(0, len);
-        this.socket.write(bson);
+        if (this.socket) this.socket.write(bson);
         if (bson[12] === (OP_QUERY & 0xFF) || bson[12] === (OP_GET_MORE & 0xFF)) this._runningCallsCount += 1;
         qInfo.bson = 'sent';
 
@@ -409,19 +411,23 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
     this.qm = qm;
     this.ns = ns;
     // fetchLimit is the user-specified max documents to return,
-    // as opposed to the internal batch limit
+    // as opposed to the internal batch limit.  It is cleared to 0
+    // when the cursor is closed and no more data will be read.
     this.fetchLimit = fetchLimit;
 
     this.batchSize = this.qm.batchSize;
     this.cursorId = 0;          // set once results start arriving, cleared when done
     this.docs = null;           // the array of matching documents
+    this._refillSelf = null;    //
+    this._refillCb = null;
 
     var self = this;
-    qInfo.cb = function(err, docs, cursorId) { self._refill(err, docs, cursorId) };
+    qInfo.cb = this._getRefillSelf();
 }
+// merge in a new batch of docs into our exiting bunch
 Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
     this.cursorId = cursorId;   // if cursor still live
-    if (!docs) this.close();    // docs only if no error
+    if (!docs) this.close();    // always get docs array unless error
     else {
         if (!this.docs) this.docs = docs;       // first batch
         else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
@@ -429,46 +435,57 @@ Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
         if (!this.fetchLimit) this.close();
     }
 }
+// create and cache a closure to refill our documents store and notify the interested callback
+Cursor.prototype._getRefillSelf = function _getRefillSelf( ) {
+    if (!this._refillSelf) {
+        var self = this;
+        this._refillSelf = function _refillSelf(err, docs, cursorId) {
+            self._refill(err, docs, cursorId);
+            if (self._refillCb) self._refillCb();
+        }
+    }
+    return this._refillSelf;
+}
 // close the query to free the cursor memory on the server
 Cursor.prototype.close = function close( ) {
     if (this.cursorId) {
         this.qm.killCursor(this.cursorId);
-        this.cursorId = 0;
+        this.cursorId = 0;      // cannot read more data
+        this.fetchLimit = 0;    // not expecting more data
         // already fetched documents are not cleared, so it`s possible
         // to keep fetching items from a closed cursor.  This way we can
         // close the cursor as soon as we got the last batch.
     }
 }
-// fetch the next item from the result set
-Cursor.prototype.fetch = function fetch( cb ) {
-    var self = this;
+// return the next item from the result set
+// TODO: prefetch next batch when running low on items?
+Cursor.prototype.nextObject = function nextObject( cb ) {
+    // if have some items on hand, return one
     if (this.docs && this.docs.length) {
-        // TODO: prefetch next batch when running low on items?
         var doc = this.docs.shift();
-        if (!this.docs.length) this.docs = null;
         return cb(null, doc);
     }
 
+    // if still waiting for the next batch, get notified once arrived
+    if (this.fetchLimit > 0) {
+        var self = this;
+        if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), self.cursorId, self.qInfo.raw, self._getRefillSelf());
+        this._refillCb = function() { return self.nextObject(cb); }
+    }
     // if out of data and no way to fetch more, indicate done with null
-    if (!this.cursorId) return cb(null, null);
-
-    this.qm.opGetMore(
-        this.ns, this.getFetchLimit(), this.cursorId, this.qInfo.raw,
-        function(err, docs, cursorId) {
-            self._refill(err, docs, cusorId);
-            return self.fetch(cb);
-        }
-    );
+    else return cb(null, null);
 }
-Cursor.prototype.fetchBatch = function fetchBatch( batchSize ) {
+// return the next batchSize items from the result set
+Cursor.prototype.fetchBatch = function nextBatch( batchSize, cb ) {
 // TODO: writeme: fetch this many elements from the result stream
 }
-Cursor.prototype.getFetchLimit = function getFetchLimit( ) {
+Cursor.prototype.cursorFetchSize = function cursorFetchSize( ) {
     return (this.fetchLimit < this.batchSize) ? this.fetchLimit : this.batchSize;
 }
 // fetch all remaining items in the result set
 Cursor.prototype.toArray = function toArray( callback ) {
     var self = this, fetchLimit = self.fetchLimit;
+    // TODO: see if getRefillSelf() could be used here
     this.qInfo.cb = function refill(err, docs, cursorId) {
        if (docs && docs.length >= fetchLimit) {
             // fast path: single batch, no errors
@@ -477,11 +494,10 @@ Cursor.prototype.toArray = function toArray( callback ) {
         }
         self._refill(err, docs, cursorId);
         if (err) return callback(err);
-        else if (self.cursorId) self.qm.opGetMore(self.ns, self.getFetchLimit(), cursorId, self.qInfo.raw, refill);
+        else if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), cursorId, self.qInfo.raw, refill);
         else return callback(null, self.docs);
     }
 }
-Cursor.prototype.nextObject = Cursor.prototype.fetch;
 Cursor.prototype.batchSize = function batchSize( length ) {
     this.batchSize = batchSize;
     return this;
@@ -736,6 +752,7 @@ Buffer.prototype.strings = function(base, bound) {
 }
 
 var assert = require('assert');
+var aflow = require('aflow');
 
 var mongo = QMongo;
 //var mongo = require('mongodb').MongoClient;
@@ -745,8 +762,8 @@ mongo.connect("mongodb://@localhost", {batchSize: 5000}, function(err, db) {
     var n = 0;
     var t1 = Date.now();
     // caution: 1e6 pending calls crashed my mongod!
-    var nloops = 50000;
-    var limit = 20;
+    var nloops = 5000;
+    var limit = 200;
     var expect = nloops * limit;
     // caution: mongodb needs `true`, mongo server accepts `1`
     var options = { limit: limit, raw: true };
@@ -754,28 +771,54 @@ mongo.connect("mongodb://@localhost", {batchSize: 5000}, function(err, db) {
     console.log("AR:", process.memoryUsage());
     var t1 = Date.now();
   for (var i=0; i<nloops; i++)
-    db.db('kinvey').collection('kdsdir').find({}, options).toArray(function(err, docs) {
-        if (err) { console.log("AR: find error", err); throw err; }
-        assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
-        n += docs.length;
-        if (n >= expect) {
-            var t2 = Date.now();
-            console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
-            console.log("AR: toArray returned %d docs", docs.length);
-            console.log("AR:", process.memoryUsage());
-            assert.equal(docs.length, limit);
+    db.db('kinvey').collection('kdsdir').find({}, options, function(err, cursor) {
+if (1) {
+        aflow.repeatUntil(
+            function(done) {
+                cursor.nextObject(function(err, doc) {
+//console.log("AR: aflow got", err);
+                    if (doc) n += 1;
+                    done(err, !doc);
+                });
+            },
+            function(err) {
+                if (err) console.log("AR: nextObject err", err, n, expect);
+//console.log("AR: done, n, expect", n, expect);
+                if (n >= expect) {
+                    var t2 = Date.now();
+                    console.log("AR: got %dk docs in %d ms", n / 1000, t2 - t1);
+                    console.log("AR:", process.memoryUsage());
+                    db.close();
+                }
+                if (err) db.close();
+            }
+        );
+}
+if (0) {
+        cursor.toArray(function(err, docs) {
+            if (err) { console.log("AR: find error", err); throw err; }
+            assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
+            n += docs.length;
+            if (n >= expect) {
+                var t2 = Date.now();
+                console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
+                console.log("AR: toArray returned %d docs", docs.length);
+                console.log("AR:", process.memoryUsage());
+                assert.equal(docs.length, limit);
 //console.log("AR: got", docs[0], qbson.decode(docs[0]));
-            db.close();
+                db.close();
 console.log("AR:", process.memoryUsage());
 //console.log("AR:", db);
-            // 1.5m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
-            // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
-            // 1m 200@, raw: .66 sec qmongo vs 1.6 sec mongodb, 45 mb vs 150 mb rss
-            //        , decoded: 7.7 sec vs 11.2 sec, 46 mb vs 82 mb rss
-            // 1m 20000@, raw: .79 sec qmongo vs 1.2 sec mongodb, 108 mb vs 308 mb rss
-            //          , decoded: 10 sec vs 11 sec, 96 (or 82) mb vs 335 mb rss
-        }
-    })
+                // 1.5m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
+                // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
+                // 1m 200@, raw: .66 sec qmongo vs 1.6 sec mongodb, 45 mb vs 150 mb rss
+                //        , decoded: 7.7 sec vs 11.2 sec, 46 mb vs 82 mb rss
+                // 1m 20000@, raw: .79 sec qmongo vs 1.2 sec mongodb, 108 mb vs 308 mb rss
+                //          , decoded: 10 sec vs 11 sec, 96 (or 82) mb vs 335 mb rss
+            }
+        })
+}
+    });
 });
 
 }
