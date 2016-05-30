@@ -1,10 +1,13 @@
 /**
- * qm, simplified subset of qmongo
-
-Todo:
-+ strip out cursor
-- strip out reconnect logic
-
+ * qmongo -- fast stripped-down mongodb driver for nodejs
+ *
+ * Yet another spin-off from the 2016 Kinvey Hackathon.  Started with
+ * direct BSON to JSON translation, moved on to BSON encode/decode, and
+ * ended up with a functional mongodb driver.
+ *
+ * See also qmongo.js that supports batched streaming and cursors.
+ *
+ * 2016-05-24 - AR.
  */
 
 'use strict';
