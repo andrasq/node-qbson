@@ -366,7 +366,6 @@ QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fi
     this.queryQueue.push(qInfo = {
         cb: callback || _noop,
         raw: options.raw,
-        exhaust: false,
         bson: bson,
     });
     _setOptionFlags(options, bson, 16);
@@ -428,6 +427,8 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
     qInfo.cb = this._getRefillSelf();
 }
 // merge in a new batch of docs into our exiting bunch
+// Note: it is not faster to append to the existing array, caching effects or something
+// halves the speed.  Faster to allocate a new array for each batch, then merge it in.
 Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
     this.cursorId = cursorId;   // if cursor still live
     if (!docs) {
@@ -638,8 +639,8 @@ function deliverReplies( qmongo, qbuf ) {
         }
 
         // decode the reply itself, retrieve and decode the returned documents
-        var reply = decodeReply(buf, 16, buf.length, qInfo.raw);
-        var docs = reply.documents;     // always an array
+        var docs = new Array();
+        var reply = decodeReply(buf, 16, buf.length, qInfo.raw, docs);
         var err = null;
         if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
             if (reply.responseFlags & FL_R_QUERY_FAILURE) {
@@ -705,7 +706,7 @@ function decodeHeader( buf, offset ) {
 
 // TODO: move mongo protocol code out into a separate file (lib/qmongo.js vs lib/wire.js)
 // including encodeHeader, decodeHeader, decodeReply
-function decodeReply( buf, base, bound, raw ) {
+function decodeReply( buf, base, bound, raw, documents ) {
     var low32 = getUInt32(buf, base+4), high32 = getUInt32(buf, base+8);
     var reply = {
         responseFlags: getUInt32(buf, base),
@@ -713,7 +714,7 @@ function decodeReply( buf, base, bound, raw ) {
         startingFrom: getUInt32(buf, base+12),
         numberReturned: getUInt32(buf, base+16),
         error: null,
-        documents: new Array(),
+        documents: documents,
     };
     base += 20;
 
@@ -733,7 +734,7 @@ function decodeReply( buf, base, bound, raw ) {
             "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
         throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
     }
-    if (reply.documents.length !== reply.numberReturned) {
+    if (reply.documents.length < reply.numberReturned) {
         // FIXME: handle this better
         throw new MongoError("did not get expected number of documents, got " + reply.documents.length + " vs " + reply.numberReturned);
     }
