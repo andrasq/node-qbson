@@ -281,6 +281,7 @@ function putString( s, target, offset ) {
 // quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
 
+var assert = require('assert');
 var util = require('util');
 var timeit = require('qtimeit');
 var bson = require('bson');
@@ -312,20 +313,20 @@ var data = {a:1, b:2, c:3, d:4, e:5};   // 780% (was 585%); 952% with 5-char fie
 var data = {a: "ABC", b: 1, c: "DEFGHI\x88", d: 12345.67e-1, e: null};  // 557%
 var data = [1,2,3,4,5];                 // 705%
 var data = {test: {test: {test: {}}}}   // 225% (244% for a:)
-var data = {a: {b: {c: {d: {e: 5}}}}};  // 191%
+var data = {a: {b: {c: {d: {e: 5}}}}};  // 191% -> NOT! retimed 1275%
 var data = new Date();                  // 220%
 var data = new RegExp("fo[o]", "i");    // 450%, same as /fo[o]/i
 var data = {a: new RegExp("fo\x00[o]", "i")};   // 230% (bug for bug compatible... sigh.)
 var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
-var data = {};                          // 400% with long var names; 710% with short names
+var data = {};                          // 450% with long var names; 715% with short names
 //var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;        // 845%
 //var data = bson.ObjectId("123456781234567812345678");         // 100% base
 //var data = new qbson.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
 //var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
 //var data = require('./prod-data.js');   // 500% ?! (with inlined guessSize, only 2x w/o)
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%
-var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: new Date(), g: {zz:12.5}, h: [1,2]};
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: new Date(), g: {zz:12.5}, h: [1,2]};   // 978%
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
@@ -333,6 +334,7 @@ for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
 
 console.log(bson_encode({a: data}));
 console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
+assert.deepEqual(bson_encode(testObj), BSON.serialize(testObj));
 
 var nloops = 40000;
 var x;
