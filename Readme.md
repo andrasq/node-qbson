@@ -22,7 +22,7 @@ Manifest
 - `object-id.js` - very fast mongo ObjectId() construction and conversion
 - `utf8.js` - UTF-8 string encoding and decoding, sometimes duplicating parts of `buffer` and `string_decoder`
 - `json-decoder` - wanted just JSON concatenation, but turned into a full work-alike of `require('string_decoder')`
-- `qmongo.js` - very simple nodejs mongo client made to resemble `mongodb`
+- `qmongo.js` - simple nodejs mongo client made to resemble `mongodb`
 
 encode
 ------
