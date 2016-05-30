@@ -328,7 +328,6 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     }
 }
 
-// TODO: push onto killCursorsQueue to batch and flush 20x per second
 QMongo.prototype.opKillCursors = function opKillCursors( cursors ) {
     var bson = new Buffer(16 + 8 + 8 * arguments.length);
     cursors = Array.isArray(cursors) ? cursors : arguments;
@@ -420,6 +419,7 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
     this.docs = null;           // the array of matching documents
     this._refillSelf = null;    //
     this._refillCb = null;
+    this._refillError = null;
 
     var self = this;
     qInfo.cb = this._getRefillSelf();
@@ -427,7 +427,10 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
 // merge in a new batch of docs into our exiting bunch
 Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
     this.cursorId = cursorId;   // if cursor still live
-    if (!docs) this.close();    // always get docs array unless error
+    if (!docs) {
+        this.close();           // always get docs unless error
+        this._refillError = err;
+    }
     else {
         if (!this.docs) this.docs = docs;       // first batch
         else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
@@ -465,7 +468,6 @@ Cursor.prototype.nextObject = function nextObject( cb ) {
         var doc = this.docs.shift();
         return cb(null, doc);
     }
-
     // if still waiting for the next batch, get notified once arrived
     if (this.fetchLimit > 0) {
         var self = this;
@@ -473,7 +475,7 @@ Cursor.prototype.nextObject = function nextObject( cb ) {
         this._refillCb = function() { return self.nextObject(cb); }
     }
     // if out of data and no way to fetch more, indicate done with null
-    else return cb(null, null);
+    else return cb(this._refillError, null);
 }
 // return the next batchSize items from the result set
 Cursor.prototype.fetchBatch = function nextBatch( batchSize, cb ) {
@@ -483,9 +485,9 @@ Cursor.prototype.cursorFetchSize = function cursorFetchSize( ) {
     return (this.fetchLimit < this.batchSize) ? this.fetchLimit : this.batchSize;
 }
 // fetch all remaining items in the result set
+// nb: using getRefillSelf() is much slower, loses the fast path advantage
 Cursor.prototype.toArray = function toArray( callback ) {
     var self = this, fetchLimit = self.fetchLimit;
-    // TODO: see if getRefillSelf() could be used here
     this.qInfo.cb = function refill(err, docs, cursorId) {
        if (docs && docs.length >= fetchLimit) {
             // fast path: single batch, no errors
