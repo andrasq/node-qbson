@@ -1,4 +1,12 @@
-// testing...
+/**
+ * qmongo -- fast stripped-down mongodb driver for nodejs
+ *
+ * Yet another spin-off from the 2016 Kinvey Hackathon.  Started with
+ * direct BSON to JSON translation, moved on to BSON encode/decode, and
+ * ended up with a functional mongodb driver.
+ *
+ * 2016-05-24 - AR.
+ */
 
 'use strict';
 
@@ -31,6 +39,12 @@ function putStringZ( str, buf, offset ) {
     offset = utf8.encodeUtf8Overlong(str, 0, str.length, buf, offset);
     buf[offset++] = 0;
     return offset;
+}
+
+// compute the hex md5 checksum
+function md5sum( str ) {
+    var cksum = crypto.createHash('md5').update(str).digest('hex');
+    return cksum;
 }
 
 /*
@@ -512,12 +526,6 @@ Cursor.prototype = Cursor.prototype;
 
 // expose runCommand on the underlying qm object as well, runs against the qm.dbName db
 QMongo.prototype.runCommand = Db.prototype.runCommand;
-
-// compute the hex md5 checksum
-function md5sum( str ) {
-    var cksum = crypto.createHash('md5').update(str).digest('hex');
-    return cksum;
-}
 
 QMongo.prototype.auth = function auth( username, password, database, callback ) {
     if (!callback) { callback = database; database = null; }
