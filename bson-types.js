@@ -34,6 +34,8 @@ module.exports = {
     MaxKey: MaxKey,
     Long: Long,
     DbRef: DbRef,
+    Binary: Binary,
+    ScopedFunction: ScopedFunction,
 
     // function with or without scope builder
     makeFunction: makeFunction,
@@ -168,3 +170,25 @@ function DbRef( name, oid ) {
     this.oid = oid;
 }
 // TODO: add get and put methods to the class.
+
+/*
+ * Binary is an abstract class to represent user-defined binary types
+ */
+function Binary( ) {
+    this.subtype = 0;   // expose "subtype" on all derived classes
+    this.length = 0;    // expose "length" (num bytes) on all derived classes
+    // override
+}
+// abstracat method to copy out the binary data into the target buffer
+// starting at position offset
+Binary.prototype.copy = function copy( buf, offset ) {
+    // override
+}
+Binary.prototype = Binary.prototype;
+
+// class to represent scoped functions to make them encodable
+function ScopedFunction( func, scope ) {
+    this.func = func;
+    this.scope = scope;
+}
+
