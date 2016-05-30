@@ -443,7 +443,7 @@ function Cursor( qInfo, qm, ns, fetchLimit ) {
 // merge in a new batch of docs into our exiting bunch
 // Note: it is not faster to append to the existing array, caching effects or something
 // halves the speed.  Faster to allocate a new array for each batch, then merge it in.
-Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
+Cursor.prototype._refill = function _refill( err, docs, cursorId, nDocs ) {
     this.cursorId = cursorId;   // if cursor still live
     if (!docs) {
         this.close();           // always get docs unless error
@@ -451,8 +451,8 @@ Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
     }
     else {
         if (!this.docs) this.docs = docs;       // first batch
-        else for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
-        this.fetchLimit -= docs.length;
+        else if (docs !== this.docs) for (var i=0; i<docs.length; i++) this.docs.push(docs[i]);
+        this.fetchLimit -= nDocs;
         if (!this.fetchLimit) this.close();
     }
 }
@@ -460,8 +460,8 @@ Cursor.prototype._refill = function _refill( err, docs, cursorId ) {
 Cursor.prototype._getRefillSelf = function _getRefillSelf( ) {
     if (!this._refillSelf) {
         var self = this;
-        this._refillSelf = function _refillSelf(err, docs, cursorId) {
-            self._refill(err, docs, cursorId);
+        this._refillSelf = function _refillSelf(err, docs, cursorId, nDocs) {
+            self._refill(err, docs, cursorId, nDocs);
             if (self._refillCb) self._refillCb();
         }
     }
@@ -489,12 +489,13 @@ Cursor.prototype.nextObject = function nextObject( cb ) {
     // if still waiting for the next batch, get notified once arrived
     if (this.fetchLimit > 0) {
         var self = this;
-        if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), self.cursorId, self.qInfo.raw, self._getRefillSelf());
+        if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), self.cursorId, self.qInfo.raw, self.docs, self._getRefillSelf());
         this._refillCb = function() { return self.nextObject(cb); }
     }
     // if out of data and no way to fetch more, indicate done with null
     else return cb(this._refillError, null);
 }
+Cursor.prototype.next = Cursor.prototype.nextObject;
 // return the next batchSize items from the result set
 Cursor.prototype.fetchBatch = function nextBatch( batchSize, cb ) {
 // TODO: writeme: fetch this many elements from the result stream
@@ -506,15 +507,15 @@ Cursor.prototype.cursorFetchSize = function cursorFetchSize( ) {
 // nb: using getRefillSelf() is much slower, loses the fast path advantage
 Cursor.prototype.toArray = function toArray( callback ) {
     var self = this, fetchLimit = self.fetchLimit;
-    this.qInfo.cb = function refill(err, docs, cursorId) {
+    this.qInfo.cb = function refill(err, docs, cursorId, nDocs) {
        if (docs && docs.length >= fetchLimit) {
             // fast path: single batch, no errors
             self.close();
             return callback(null, docs);
         }
-        self._refill(err, docs, cursorId);
+        self._refill(err, docs, cursorId, nDocs);
         if (err) return callback(err);
-        else if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), cursorId, self.qInfo.raw, refill);
+        else if (self.cursorId) self.qm.opGetMore(self.ns, self.cursorFetchSize(), cursorId, self.qInfo.raw, self.docs, refill);
         else return callback(null, self.docs);
     }
 }
@@ -666,7 +667,7 @@ function deliverReplies( qmongo, qbuf ) {
         }
 
         // dispatch reply to its callback
-        qInfo.cb(err, docs, reply.cursorId);
+        qInfo.cb(err, docs, reply.cursorId, docs.length);
 
         qmongo._runningCallsCount -= 1;
         handledCount += 1;
