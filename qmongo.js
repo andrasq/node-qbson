@@ -250,6 +250,9 @@ Db.prototype.runCommand = function runCommand( cmd, args, callback ) {
         return err ? callback(err) : callback(null, ret[0]);
     });
 }
+Db.prototype.close = function( ) {
+    this.qmongo.close();
+}
 Db.prototype = Db.prototype;
 
 function Collection( qmongo, dbName, collectionName ) {

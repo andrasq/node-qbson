@@ -3,6 +3,10 @@ qmongo
 
 Simple mongodb driver for nodejs, similar to `mongodb`.
 
+This was written as an exercise to try and see how much speedup was to be had in
+talking to mongo database.  Only `find` and `runCommand` have been implemented.
+Database-side errors are not retrieved other than what is sent back in the reply.
+
         var creds = "mongodb://user:pass@host/database";
         qmongo.connect(creds, function(err, qm) {
             var query = { };
