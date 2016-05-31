@@ -41,6 +41,11 @@ function putStringZ( str, buf, offset ) {
     return offset;
 }
 
+function decodeBsonNamedValues( buf, base, bound, target ) {
+    try { return qbson.decode.getBsonEntities(buf, base, bound, target); }
+    catch (err) { return err; }
+}
+
 // compute the hex md5 checksum
 function md5sum( str ) {
     var cksum = crypto.createHash('md5').update(str).digest('hex');
@@ -311,6 +316,7 @@ QMongo.prototype.scheduleQuery = function scheduleQuery( ) {
     // TODO: make the concurrent call limit configurable,
     // best value depends on how much latency is being spanned
     // 10% faster with 300 if making 50k concurrent calls, 25% for 500k
+    // Empirically, 3 seems to be a good value
     while (this._runningCallsCount < 3 && (qInfo = this.queryQueue.shift())) {
         // TODO: no reason why the queued queries cant be retried after a reconnect
         if (qInfo.cb) {
@@ -393,6 +399,7 @@ QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fi
         cb: callback || _noop,
         raw: options.raw,
         bson: bson,
+        docs: null,     // faster to allocate the first results array while decoding
     });
     _setOptionFlags(options, bson, 16);
 
@@ -411,7 +418,7 @@ function _setOptionFlags( options, bson, offset) {
     // FL_Q_PARTIAL
 }
 
-QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callback ) {
+QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, docs, callback ) {
     var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
 
     // getMore
@@ -431,6 +438,7 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callb
         cb: callback,
         bson: bson,
         raw: raw,
+        docs: docs,     // slightly faster to append to existing array than to copy
     });
     this.scheduleQuery();
 }
@@ -585,6 +593,7 @@ function _makeRequestId( ) {
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 function deliverReplies( qmongo, qbuf ) {
     var handledCount = 0;
+    // TODO: make the limit configurable.  Emprically, 4-10 works well on localhost.
     var limit = 4;                              // how many replies to process before yielding the cpu
 
     if (qmongo._deliverRunning) return;
@@ -596,7 +605,7 @@ function deliverReplies( qmongo, qbuf ) {
     for (;;) {
         // yield to the event loop after limit replies, and schedule the remaining work
         if (handledCount >= limit) {
-            setImmediate(function(){ deliverReplies(qmongo, qbuf) });
+            if (qbuf.length > 36) setImmediate(function(){ deliverReplies(qmongo, qbuf) });
             break;
         }
 
@@ -625,14 +634,18 @@ function deliverReplies( qmongo, qbuf ) {
             continue;
         }
 
-        // decode the reply itself, retrieve and decode the returned documents
-        var docs = new Array();
+        // decode the reply, retrieve the decoded returned documents (or buffers if raw)
+        var docs = qInfo.docs || new Array();
         var reply = decodeReply(buf, 16, buf.length, qInfo.raw, docs);
         var err = null;
-        if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
+        if (reply.error) {
+            err = reply.error;
+            docs = null;
+        }
+        else if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
             if (reply.responseFlags & FL_R_QUERY_FAILURE) {
                 // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
-                reply.error = qbson.decode(reply.documents[0]);
+                reply.error = decodeBsonNamedValues(reply.documents[0], 4, reply.documents[0].length-1, new Object());
                 docs = null;
                 // send MongoError for query failure and bad bson
                 err = new MongoError('QueryFailure');
@@ -645,7 +658,7 @@ function deliverReplies( qmongo, qbuf ) {
         }
 
         // dispatch reply to its callback
-        qInfo.cb(err, docs, reply.cursorId, docs.length);
+        qInfo.cb(err, docs, reply.cursorId, reply.numberReturned);
 
         qmongo._runningCallsCount -= 1;
         handledCount += 1;
@@ -714,24 +727,19 @@ function decodeReply( buf, base, bound, raw, documents ) {
     base += 20;
 
     // documents are end-to-end concatenated bson objects (mongodump format)
-    // TODO: non-blocking decode, take a callback
     while (base < bound) {
         var obj, len = getUInt32(buf, base);
         // return a complete bson object if raw, or decode faster without buf.slice to object
-// TRY: re-time whether decoding as a separate step is any slower
-        var obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
+        var obj = raw ? buf.slice(base, base+len) : decodeBsonNamedValues(buf, base+4, base+len-1, new Object());
+        if (obj instanceof Error) {
+            reply.error = obj;
+            return reply;
+        }
         documents.push(obj);
         base += len;
     }
     if (base !== bound) {
-        // FIXME: clean up without killing self. (eg, make a method, and emit 'error')
-        console.log("qmongo: incomplete entity, header:", decodeHeader(buf, base), "flags:", reply.responseFlags.toString(16),
-            "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
-        throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
-    }
-    if (documents.length < reply.numberReturned) {
-        // FIXME: handle this better
-        throw new MongoError("did not get expected number of documents, got " + documents.length + " vs " + reply.numberReturned);
+        reply.error = new MongoError("corrupt bson, expected documents to end at offset " + bound + ", not " + base);
     }
 
     return reply;
