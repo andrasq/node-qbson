@@ -67,8 +67,6 @@ function QMongo( socket, options ) {
     this.batchSize = options.batchSize || 10000;
     this._closed = false;
     this._deliverRunning = false;
-// TODO: rename _pendingRepliesCount, and only increment if a reply is expected (ie opQuery and opGetMore)
-// to be able to pump cursor cancel messages without penalty
     this._runningCallsCount = 0;
     this._responseCount = 0;
 }
@@ -414,7 +412,6 @@ function _setOptionFlags( options, bson, offset) {
 }
 
 QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callback ) {
-    // TODO: normalize query sizes for easier reuse?
     var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
 
     // getMore
@@ -584,10 +581,8 @@ function _makeRequestId( ) {
     return _lastRequestId || (_lastRequestId = 1);
 }
 
-
 // TODO: make this a method?
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
-// TODO: this function is not getting optimized -- fix or work around
 function deliverReplies( qmongo, qbuf ) {
     var handledCount = 0;
     var limit = 4;                              // how many replies to process before yielding the cpu
@@ -725,7 +720,7 @@ function decodeReply( buf, base, bound, raw, documents ) {
         // return a complete bson object if raw, or decode faster without buf.slice to object
 // TRY: re-time whether decoding as a separate step is any slower
         var obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
-        reply.documents.push(obj);
+        documents.push(obj);
         base += len;
     }
     if (base !== bound) {
@@ -734,9 +729,9 @@ function decodeReply( buf, base, bound, raw, documents ) {
             "buf:", buf.strings(base), buf.slice(base-30), "error:", reply.error);
         throw new MongoError("corrupt bson, incomplete entity " + base + " of " + bound);
     }
-    if (reply.documents.length < reply.numberReturned) {
+    if (documents.length < reply.numberReturned) {
         // FIXME: handle this better
-        throw new MongoError("did not get expected number of documents, got " + reply.documents.length + " vs " + reply.numberReturned);
+        throw new MongoError("did not get expected number of documents, got " + documents.length + " vs " + reply.numberReturned);
     }
 
     return reply;
