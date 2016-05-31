@@ -369,12 +369,26 @@ QMongo.prototype.opKillCursors = function opKillCursors( cursors ) {
     this.scheduleQuery();
 }
 
-// TODO: normalize query sizes for easier reuse?
-// TODO: move the work of buildQuery in here
-// var bson = new Buffer(16 + (4 + (3*ns.length+1) + 8 + 1) +
-//     qbson.encode.guessSize(query) + (fields ? qbson.guessSize(fields) : 0));
 QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fields, callback ) {
-    var bson = buildQuery(0, ns, query, fields, skip, limit);
+    var szQuery = qbson.encode.guessSize(query);
+    var szFields = fields ? qbson.encode.guessSize(fields) : 0;
+    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;;
+    var bson = new Buffer(bufSize);
+
+    // query
+    var offset = 0;
+    offset = putInt32(0, bson, 16);             // flags, must be set
+    offset = putStringZ(ns, bson, 20);          // ns
+    offset = putInt32(skip, bson, offset);      // skip
+    offset = putInt32(limit, bson, offset);     // limit
+    offset = qbson.encode.encodeEntities(query, bson, offset);  // query
+    if (fields) offset = qbson.encode.encodeEntities(fields, bson, offset);  // fields
+
+    // header once total size is known
+    putInt32(offset, bson, 0);          // total length
+    // 4 - requestId filled in by scheduleQuery
+    putInt32(0, bson, 8);               // zero responseTo, to keep mongo happy
+    putInt32(OP_QUERY, bson, 12);       // opCode
 
     var qInfo;
     this.queryQueue.push(qInfo = {
@@ -403,13 +417,17 @@ QMongo.prototype.opGetMore = function opGetMore( ns, limit, cursorId, raw, callb
     // TODO: normalize query sizes for easier reuse?
     var bson = new Buffer(16 + 12 + qbson.encode.guessSize(ns));
 
+    // getMore
     putInt32(0, bson, 16);                      // ZERO
     var offset = putStringZ(ns, bson, 20);      // ns - why is namespace needed?
     putInt32(limit, bson, offset);              // limit
     offset = cursorId.put(bson, offset+4);      // cursor Id
 
-    // id -1 as a placeholder, responseTo 0
-    encodeHeader(bson, 0, offset, -1, 0, OP_GET_MORE);
+    // header
+    putInt32(offset, bson, 0);          // total length
+    // requestId filled in by scheduleQuery
+    putInt32(0, bson, 8);               // zero responseTo
+    putInt32(OP_GET_MORE, bson, 12);    // opCode
 
     var qInfo;
     this.queryQueue.push(qInfo = {
@@ -567,41 +585,6 @@ function _makeRequestId( ) {
 }
 
 
-
-function buildQuery( reqId, ns, query, fields, skip, limit ) {
-    // allocate a buffer to hold the query
-    var szQuery = qbson.encode.guessSize(query);
-    var szFields = qbson.encode.guessSize(fields);
-    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;;
-    // TODO: normalize query sizes for easier reuse?
-    var msg = new Buffer(bufSize);
-
-    // build the query
-    var offset = 0;
-    offset = putInt32(0, msg, 16);                              // flags, must be set
-    offset = utf8.encodeUtf8Overlong(ns, 0, ns.length, msg, 20); // ns
-    msg[offset++] = 0;  // NUL byte cstring terminator
-    offset = putInt32(skip, msg, offset);          // skip
-    offset = putInt32(limit, msg, offset);         // limit
-    offset = qbson.encode.encodeEntities(query, msg, offset);   // query
-    if (fields) offset = qbson.encode.encodeEntities(fields, msg, offset);  // fields
-
-    // encode the header once the final size is known
-    // zero out respTo to keep mongo happy
-    encodeHeader(msg, 0,  offset, reqId, 0, OP_QUERY);
-
-    return msg;
-}
-
-function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
-    // TRY: return pack(buf, offset, ['i', length, 'i', reqId, 'i', respTo, 'i', opCode]);
-    putInt32(length, buf, offset+0);
-    putInt32(reqId, buf, offset+4);
-    putInt32(respTo, buf, offset+8);
-    putInt32(opCode, buf, offset+12);
-    return offset+16;
-}
-
 // TODO: make this a method?
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 // TODO: this function is not getting optimized -- fix or work around
@@ -704,6 +687,14 @@ function compactCbMap( qmongo ) {
 
 }
 
+function encodeHeader( buf, offset, length, reqId, respTo, opCode ) {
+    putInt32(length, buf, offset+0);
+    putInt32(reqId, buf, offset+4);
+    putInt32(respTo, buf, offset+8);
+    putInt32(opCode, buf, offset+12);
+    return offset+16;
+}
+
 function decodeHeader( buf, offset ) {
     return {
         length: getUInt32(buf, offset+0),
@@ -787,7 +778,7 @@ mongo.connect("mongodb://@localhost", {batchSize: 5000}, function(err, db) {
     var t1 = Date.now();
   for (var i=0; i<nloops; i++)
     db.db('kinvey').collection('kdsdir').find({}, options, function(err, cursor) {
-if (1) {
+if (0) {
         aflow.repeatUntil(
             function(done) {
                 cursor.nextObject(function(err, doc) {
@@ -809,7 +800,7 @@ if (1) {
             }
         );
 }
-if (0) {
+if (1) {
         cursor.toArray(function(err, docs) {
             if (err) { console.log("AR: find error", err); throw err; }
             assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
