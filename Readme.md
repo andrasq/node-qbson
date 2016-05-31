@@ -12,7 +12,7 @@ The hand-rolled decoder is slightly faster than the native C++ module to convert
 most atomic types, but is 6x (!) faster decoding arrays.  The encoder is overall
 much faster, 2x to 6x faster on primitives and as much as 12x faster on compound
 data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.  Timings with
-node-v0.10.42 are remarkably different, so beware your node version.
+node-v0.10.42 can be remarkably different, so beware your node version.
 
 Manifest
 --------
