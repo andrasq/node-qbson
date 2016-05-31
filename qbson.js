@@ -16,7 +16,6 @@ var bsonTypes = require('./bson-types.js');
 module.exports = {
     encode: encode,
     decode: decode,
-    toJson: null,
 
     ObjectId: bsonTypes.ObjectId,
     ObjectID: bsonTypes.ObjectId,
@@ -24,5 +23,7 @@ module.exports = {
     Long: bsonTypes.Long,
     MinKey: bsonTypes.MinKey,
     MaxKey: bsonTypes.MaxKey,
-    DbRef: bsonTypes.dbRef,
+    DbRef: bsonTypes.DbRef,
+    Binary: bsonTypes.Binary,
+    ScopedFunction: bsonTypes.ScopedFunction,
 };
