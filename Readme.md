@@ -14,6 +14,10 @@ much faster, 2x to 6x faster on primitives and as much as 12x faster on compound
 data.  Timed with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.  Timings with
 node-v0.10.42 can be remarkably different, so beware your node version.
 
+Possibly this package should have been called `wisent`, to follow the pattern set
+by `bson` and `buffalo` (it's a Euro-phone pun; think _bee'sown_.)
+
+
 Manifest
 --------
 
