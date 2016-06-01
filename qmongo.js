@@ -29,12 +29,10 @@ var QBuffer = require('qbuffer');
 var QList = require('qlist');
 var utf8 = require('./utf8');
 var qbson = require('./qbson');
-var bytes = require('./bytes');
 
 var putInt32 = qbson.encode.putInt32;
 var getUInt32 = qbson.decode.getUInt32;
-var getBsonEntities = qbson.decode.getBsonEntities;     // bson_decode of mongodump concat data
-var encodeEntities = qbson.encode.encodeEntities;       // bson_encode into buffer
+
 function putStringZ( str, buf, offset ) {
     offset = utf8.encodeUtf8Overlong(str, 0, str.length, buf, offset);
     buf[offset++] = 0;
