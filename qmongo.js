@@ -594,22 +594,14 @@ function _makeRequestId( ) {
 // nb: qbuf is as fast as concatenating chunks explicitly, in spite of having to slice to peek at length
 function deliverReplies( qmongo, qbuf ) {
     var handledCount = 0;
-    // TODO: make the limit configurable.  Emprically, 4-10 works well on localhost.
-    var limit = 4;                              // how many replies to process before yielding the cpu
 
     if (qmongo._deliverRunning) return;
-    if (qbuf.length < 4) return;
+    if (qbuf.length < 36) return;
 
     qmongo._deliverRunning = true;
 
     var len;
     for (;;) {
-        // yield to the event loop after limit replies, and schedule the remaining work
-        if (handledCount >= limit) {
-            if (qbuf.length > 36) setImmediate(function(){ deliverReplies(qmongo, qbuf) });
-            break;
-        }
-
         // stop if next response is not fully arrived
         if (qbuf.length <= 4) break;
         // TODO: add a readInt32LE() method on qbuf to not have to slice (peek slices)
@@ -638,31 +630,13 @@ function deliverReplies( qmongo, qbuf ) {
         // decode the reply, retrieve the decoded returned documents (or buffers if raw)
         var docs = qInfo.docs || new Array();
         var reply = decodeReply(buf, 16, buf.length, qInfo.raw, docs);
-        var err = null;
-        if (reply.error) {
-            err = reply.error;
-            docs = null;
-        }
-        else if (reply.responseFlags & (FL_R_CURSOR_NOT_FOUND | FL_R_QUERY_FAILURE)) {
-            if (reply.responseFlags & FL_R_QUERY_FAILURE) {
-                // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
-                reply.error = decodeBsonNamedValues(reply.documents[0], 4, reply.documents[0].length-1, new Object());
-                docs = null;
-                // send MongoError for query failure and bad bson
-                err = new MongoError('QueryFailure');
-                for (var k in reply.error) err[k] = reply.error[k];
-            }
-            else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
-                var err = new MongoError('CursorNotFound');
-                docs = null;
-            }
-        }
+        var err = _isReplyError(reply, false && qInfo.raw, docs);
+        // return partial list of docs on error
 
-        // dispatch reply to its callback
+        // dispatch reply to its callback.  numberReturned will be wrong if err
         qInfo.cb(err, docs, reply.cursorId, reply.numberReturned);
 
         qmongo._runningCallsCount -= 1;
-        handledCount += 1;
         qmongo._responseCount += 1;
 
         // every 8k replies compact the callback map (adds 4% overhead, but needed to not leak mem)
@@ -672,7 +646,13 @@ function deliverReplies( qmongo, qbuf ) {
             compactCbMap(qmongo);
         }
 
-        // TODO: yield to the event loop periodically
+        // yield to the event loop after 4 replies, and schedule the remaining work
+        if (++handledCount === 4) {
+            // TODO: make the handledCount limit configurable.  Empirically, 4-10 work well
+            // (on localhost, with up to 3 msgs sent to mongod per event loop)
+            if (qbuf.length > 36) setImmediate(function(){ deliverReplies(qmongo, qbuf) });
+            break;
+        }
     }
     qmongo._deliverRunning = false;
     qmongo.scheduleQuery();
@@ -745,6 +725,27 @@ function decodeReply( buf, base, bound, raw, documents ) {
 
     return reply;
 }
+
+// test whether the reply is good, or if there was an error
+// Errors can be QueryFailure, CursorNotFound, or bson decode errors
+function _isReplyError( reply, raw, docs ) {
+    if (reply.error) {
+        return reply.error;
+    }
+    else if (reply.responseFlags & FL_R_QUERY_FAILURE) {
+        // QueryFailure flag is set, respone will consist of one document with a field $err (and code)
+        var errorDoc = docs.pop();
+        if (raw) errorDoc = decodeBsonNamedValues(errordoc, 4, errorDoc.length-1, new Object());
+        err = new MongoError('QueryFailure');
+        for (var k in error) err[k] = errorDoc[k];
+        return err;
+    }
+    else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
+        return new MongoError('CursorNotFound');
+    }
+    return null;
+}
+
 
 // quicktest:
 if (process.env['NODE_TEST'] === 'qmongo') {
