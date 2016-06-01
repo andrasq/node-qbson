@@ -5,6 +5,9 @@
  * direct BSON to JSON translation, moved on to BSON encode/decode, and
  * ended up with a functional mongodb driver.
  *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * 2016-05-24 - AR.
  */
 

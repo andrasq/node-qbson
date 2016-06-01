@@ -5,6 +5,9 @@
  * with the js `with` keyword.  However, `with` is not allowed
  * in 'use strict' mode, so move it here and run it non-strict.
  *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * 2016-05-21 - AR.
  */
 

@@ -2,6 +2,9 @@
  * decode buffers into json string segments
  *
  * Should be fully equivalent to require('string_decoder'), but not verified.
+ *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
  */
 
 'use strict';

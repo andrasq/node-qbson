@@ -7,6 +7,9 @@
  *
  * See also qmongo.js that supports batched streaming and cursors.
  *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * 2016-05-24 - AR.
  */
 

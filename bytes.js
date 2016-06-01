@@ -15,6 +15,9 @@
  * The default storage order for the bytes is little-endian (least significant
  * byte at the lowest address).
  *
+ * Copyright (C) 2016 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * 2016-05-27 - AR.
  */
 
