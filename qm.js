@@ -166,11 +166,9 @@ QMongo.prototype.setSocket = function setSocket( socket ) {
     });
 
     socket.once('error', function(err) {
-        if (qmongo) {
-            qmongo.socket = null;       // socket also signals that is connected
-            qmongo.close();             // callbacks should see it closed
-            qmongo._errorAllCalls(err);
-        }
+        self.socket = null;       // socket also signals that is connected
+        self.close();             // callbacks should see it closed
+        self._errorAllCalls(err);
     });
 }
 
@@ -316,15 +314,15 @@ QMongo.prototype.opQuery = function opQuery( options, ns, skip, limit, query, fi
 
     var qInfo;
     this.queryQueue.push(qInfo = {
-        cb: callback,
+        cb: callback || _noop,  // need a placeholder to deliver docs to toArray
         raw: options.raw,
         bson: bson,
+        docs: null,
     });
     _setOptionFlags(options, bson, 16);
 
     this.scheduleQuery();
     var reply = new QueryReply(qInfo);
-    callback(null, reply);
     return reply;
 }
 function QueryReply( qInfo ) {
@@ -388,7 +386,7 @@ function buildQuery( reqId, ns, query, fields, skip, limit ) {
     // allocate a buffer to hold the query
     var szQuery = qbson.encode.guessSize(query);
     var szFields = qbson.encode.guessSize(fields);
-    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;;
+    var bufSize = 16 + 4+(3*ns.length+1)+8 + 1 + szQuery + szFields;
     // TODO: normalize query sizes for easier reuse?
     var msg = new Buffer(bufSize);
 
@@ -477,7 +475,7 @@ function deliverReplies( qmongo, qbuf ) {
                 for (var k in reply.error) err[k] = reply.error[k];
             }
             else if (reply.responseFlags & FL_R_CURSOR_NOT_FOUND) {
-                var err = new MongoError('CursorNotFound');
+                err = new MongoError('CursorNotFound');
                 docs = null;
             }
         }
@@ -550,7 +548,7 @@ function decodeReply( buf, base, bound, raw ) {
     while (base < bound) {
         var obj, len = getUInt32(buf, base);
         // return a complete bson object if raw, or decode faster without buf.slice to object
-        var obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
+        obj = raw ? buf.slice(base, base+len) : getBsonEntities(buf, base+4, base+len-1, new Object())
         reply.documents.push(obj);
         base += len;
     }
@@ -593,7 +591,6 @@ var mongo = QMongo;
 mongo.connect("mongodb://@localhost", function(err, db) {
     if (err) throw err;
     var n = 0;
-    var t1 = Date.now();
     // caution: 1e6 pending calls crashed my mongod!
     var nloops = 5000;
     var limit = 200;
@@ -604,30 +601,30 @@ mongo.connect("mongodb://@localhost", function(err, db) {
     console.log("AR:", process.memoryUsage());
     var t1 = Date.now();
   for (var i=0; i<nloops; i++)
-    db.db('kinvey').collection('kdsdir').find({}, options, function(err, results) {
-        if (err) throw err;
-        results.toArray(function(err, docs) {
-            if (err) { console.log("AR: find error", err); throw err; }
-            assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
-            n += docs.length;
-            if (n >= expect) {
-                var t2 = Date.now();
-                console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
-                console.log("AR: toArray returned %d docs", docs.length);
-                console.log("AR:", process.memoryUsage());
-                assert.equal(docs.length, limit);
+    db.db('kinvey').collection('kdsdir').find({}, options).toArray(function(err, docs)
+    //db.db('kinvey').collection('kdsdir').find({}, options, function(err, docs)
+    {
+        if (err) { console.log("AR: find error", err); throw err; }
+        assert(Array.isArray(docs));
+        assert((options.raw && Buffer.isBuffer(docs[0])) || (!options.raw && docs[0]._id) || console.log(docs[0]));
+        n += docs.length;
+        if (n >= expect) {
+            var t2 = Date.now();
+            console.log("AR: got %dk docs in %d ms", nloops * limit / 1000, t2 - t1);
+            console.log("AR: toArray returned %d docs", docs.length);
+            console.log("AR:", process.memoryUsage());
+            assert.equal(docs.length, limit);
 //console.log("AR: got", docs[0], qbson.decode(docs[0]));
-                db.close();
+            db.close();
 console.log("AR:", process.memoryUsage());
 //console.log("AR:", db);
-                // 1.5m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
-                // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
-                // 1m 200@, raw: .66 sec qmongo vs 1.6 sec mongodb, 45 mb vs 150 mb rss
-                //        , decoded: 7.7 sec vs 11.2 sec, 46 mb vs 82 mb rss
-                // 1m 20000@, raw: .79 sec qmongo vs 1.2 sec mongodb, 108 mb vs 308 mb rss
-                //          , decoded: 10 sec vs 11 sec, 96 (or 82) mb vs 335 mb rss
-            }
-        })
+            // 1.5m/s raw 200@ (1.5m/s raw 1k@), 128k/s decoded (9.2mb rss after 2m items raw, 40.1 mb 1m dec)
+            // mongodb: 682k/s raw 200@, 90.9k/s decoded (15.9 mb rss after 2m items raw, 82.7 mb 1m decoded ?!)
+            // 1m 200@, raw: .66 sec qmongo vs 1.6 sec mongodb, 45 mb vs 150 mb rss
+            //        , decoded: 7.7 sec vs 11.2 sec, 46 mb vs 82 mb rss
+            // 1m 20000@, raw: .79 sec qmongo vs 1.2 sec mongodb, 108 mb vs 308 mb rss
+            //          , decoded: 10 sec vs 11 sec, 96 (or 82) mb vs 335 mb rss
+        }
     });
 });
 
