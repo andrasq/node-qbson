@@ -161,6 +161,9 @@ Long.prototype.put = function put( buf, offset ) {
     bytes.putInt32(this.high32, buf, offset+4);
     return offset + 8;
 }
+Long.fromNumber = function longFromNumber( n ) {
+    return new Long(n & 0xFFFFFFFF, n / 0x100000000 >>> 0);
+}
 Long.prototype = Long.prototype;
 
 

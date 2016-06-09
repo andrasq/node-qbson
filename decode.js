@@ -103,6 +103,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
         case 18:
             value = new Long(getUInt32(buf, base), getUInt32(buf, base+4));
             base += 8;
+            break;
         case 13:
             base = scanString(buf, base, bound, s0);
             value = bsonTypes.makeFunction(s0.val);
@@ -207,7 +208,7 @@ function scanString( buf, base, bound, item ) {
     var len = getUInt32(buf, base);
     base += 4;
     var end = base + len - 1;
-    if (buf[end] !== 0) throw new Error("invalid bson, string at " + start + " not zero terminated");
+    if (buf[end] !== 0) throw new Error("invalid bson, string at " + base + " not zero terminated");
     // our pure js getString() is faster for short strings
     item.val = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
     return item.end = end + 1;
