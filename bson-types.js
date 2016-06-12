@@ -161,8 +161,12 @@ Long.prototype.put = function put( buf, offset ) {
     bytes.putInt32(this.high32, buf, offset+4);
     return offset + 8;
 }
-Long.fromNumber = function longFromNumber( n ) {
+Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
     return new Long(n & 0xFFFFFFFF, n / 0x100000000 >>> 0);
+}
+Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
+    if ((this.high32 & 0x1FFFFF) === 0) return this.high32 * 0x100000000 + this.low32;
+    else return { Int64: true, _lo: this.low32, _hi: this.high32 };
 }
 Long.prototype = Long.prototype;
 
@@ -176,6 +180,7 @@ function DbRef( name, oid ) {
     this.oid = oid;
 }
 // TODO: add get and put methods to the class.
+
 
 /*
  * Binary is an abstract class to represent user-defined binary types
@@ -192,7 +197,10 @@ Binary.prototype.copy = function copy( buf, offset ) {
 }
 Binary.prototype = Binary.prototype;
 
-// class to represent scoped functions to make them encodable
+
+/*
+ * class to represent scoped functions to make them encodable
+ */
 function ScopedFunction( func, scope ) {
     this.func = func;
     this.scope = scope;
