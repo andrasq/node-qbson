@@ -242,7 +242,7 @@ buffalo.deserialize = BSON.parse;
 var o = { a: 1, b: 2.5, c: "three", };
 var o = { "_id" : "545cffef20f9c47358001ad5", "kid" : "k1", "kcoll" : "kc1", "db" : "db1", "coll" : "dc1", "active" : true };
 // obj from K hackathon:
-var o = {
+var o = {                               // 300%
     ijk: 12,
     t: true,
     f: false,
@@ -287,7 +287,7 @@ var data = bson.ObjectId("123456781234567812345678");
 var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
 var data = 1234.5;
-var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 175%
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -352,6 +352,17 @@ timeit(nloops, function(){ a = bson_decode(x) });
 var json = JSON.stringify(data);
 timeit(nloops, function(){ a = JSON.parse(json) });
 //console.log(json);
+
+timeit.bench.timeGoal = 2;
+timeit.bench({
+    'qbson.decode': function(){ a = bson_decode(x) },
+    'bson.deserialize': function(){ a = BSON.deserialize(x) },
+    'buffalo.parse': function(){ a = buffalo.parse(x) },
+
+    'qbson2': function(){ a = bson_decode(x) },
+    'bson2': function(){ a = BSON.deserialize(x) },
+    'buffalo2': function(){ a = buffalo.parse(x) },
+});
 
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 //console.log(a && a[Object.keys(a)[0]]);
