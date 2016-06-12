@@ -39,9 +39,9 @@ function ObjectId( value, offset ) {
 }
 
 ObjectId.prototype._get = function _get( ) {
-    // generating into a new array is 35% faster than into a static array [0,0,...0]
-    // TODO: ...what about into [,,,,,,,,,,,,] ?
-    return this.bytes ? this.bytes : this.bytes = generateId(Array(12));
+    // generating into a static sparse array is faster than into Array(12) or new Array(12)
+    // and into Array(12) is 35% faster than into an initialized array [0,0,...0]
+    return this.bytes ? this.bytes : this.bytes = generateId([,,,,,,,,,,,,]);
 }
 
 ObjectId.prototype.copyToBuffer = function copyToBuffer( buffer, offset ) {
@@ -57,6 +57,10 @@ ObjectId.prototype.toString = function toString( ) {            // value for str
 }
 ObjectId.prototype.toJSON = ObjectId.prototype.toString;        // value for JSON.stringify
 ObjectId.prototype.inspect = ObjectId.prototype.toString;       // value for console.log
+
+ObjectId.createFromBuffer = function createFromBuffer( buf, base ) {
+    return new ObjectId().setFromBuffer(buf, base);
+}
 
 ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
     this.bytes = Array(12);
