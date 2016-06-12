@@ -10,7 +10,7 @@
 module.exports = ObjectId;
 
 
-/*
+/*----------------------------------------------------------------
  * From https://docs.mongodb.com/v3.0/reference/bson-types/#objectid
  *
  * ObjectIds are small, likely unique, fast to generate, and ordered.  ObjectId
@@ -22,7 +22,7 @@ module.exports = ObjectId;
  * - a 2-byte process id, and
  * - a 3-byte counter, starting with a random value.ObjectId
  *
- * AR note: the timetamp and sequence are stored in big-endian order,
+ * AR note: the timestamp and sequence are stored in big-endian order,
  * so I store the machine id and pid that way too.  Can't tell how
  * mongo does it, it seems to use random values for machine id and pid.
  */
@@ -40,6 +40,7 @@ function ObjectId( value, offset ) {
 
 ObjectId.prototype._get = function _get( ) {
     // generating into a new array is 35% faster than into a static array [0,0,...0]
+    // TODO: ...what about into [,,,,,,,,,,,,] ?
     return this.bytes ? this.bytes : this.bytes = generateId(Array(12));
 }
 
@@ -49,8 +50,8 @@ ObjectId.prototype.copyToBuffer = function copyToBuffer( buffer, offset ) {
     return offset+i;
 }
 
-// note that this version of toString is compatible with the bson driver,
-// but mongodb specifies a bizarra 'ObjectId("...")' format.
+// note that this version of toString is compatible with the nodejs bson driver,
+// while mongodb specifies a bizarra 'ObjectId("...")' format.
 ObjectId.prototype.toString = function toString( ) {            // value for string context (eg "" +)
     return bytesToHex(this._get(), 0, 12);
 }
@@ -64,7 +65,6 @@ ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
     }
     return this;
 }
-
 ObjectId.prototype.setFromString = function setFromString( s, from ) {
     if (!from) from = 0;
     this.bytes = Array(12);
@@ -74,19 +74,16 @@ ObjectId.prototype.setFromString = function setFromString( s, from ) {
     return this;
 }
 
-// mongo compat
-ObjectId.prototype.getTimestamp = function getTimestamp( ) {
+ObjectId.prototype.getTimestamp = function getTimestamp( ) {    // mongo compat
     var bytes = this._get();
     return new Date((bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[4]) >>> 0);
 }
-
-// mongo compat
-ObjectId.prototype.valueOf = function valueOf( ) {
+ObjectId.prototype.valueOf = function valueOf( ) {              // mongo compat
     return this.str = this.toJSON();
 }
 
 
-/*
+/*----------------------------------------------------------------
  * generate a unique ObjectId into the Buffer (or Array) dst
  * A mongo id is made of (timestamp + machine id + process id + sequence)
  */
@@ -109,6 +106,7 @@ function _incrementSequence( now ) {
         _lastNow = now;
     }
     else {
+        // prevent accidental duplicate ids
         if (_seq === _lastSeq) throw new Error("ObjectId sequence overflow");
     }
 }
@@ -139,7 +137,10 @@ function generateId( dst ) {
 ObjectId.prototype = ObjectId.prototype;        // accelerate access
 
 
-// TODO: move hexadecimal handling out into its own file 'hex.js'
+/*----------------------------------------------------------------
+ * hexadecimal string handling
+ * TODO: move hexadecimal handling out into its own file 'hex.js'
+ */
 
 // extract the byte range as a hex string
 var hexdigits = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' ];
@@ -163,6 +164,7 @@ function hexValue( code ) {
     else if (code >= 0x41 && code <= 0x46) return code - 0x41 + 10;     // A..F
     else return 0;
 }
+
 
 
 // quicktest:
