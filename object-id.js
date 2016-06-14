@@ -80,7 +80,7 @@ ObjectId.prototype.setFromString = function setFromString( s, from ) {
 
 ObjectId.prototype.getTimestamp = function getTimestamp( ) {    // mongo compat
     var bytes = this._get();
-    return new Date((bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[4]) >>> 0);
+    return new Date(((bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[4]) >>> 0) * 1000);
 }
 ObjectId.prototype.valueOf = function valueOf( ) {              // mongo compat
     return this.str = this.toJSON();
