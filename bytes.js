@@ -116,7 +116,8 @@ function getFloat( buf, pos ) {
         // zero if !mantissa, else subnormal (non-normalized reduced precision small value)
         // recover negative zero -0.0 as distinct from 0.0
         // subnormals do not have an implied leading 1 bit and are positioned 1 bit to the left
-        return value = mantissa ? (mantissa * _rshift52) * pow2(-1023 + 1) : (highWord >> 31) ? -0.0 : 0.0;
+        value = mantissa ? (mantissa * _rshift52) * pow2(-1023 + 1) : 0.0;
+        return (highWord >> 31) ? -value : value;
     }
     else if (exponent < 0x7ff) {
         // normalized value with an implied leading 1 bit and 1023 biased exponent

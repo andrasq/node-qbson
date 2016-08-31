@@ -380,8 +380,9 @@ timeit(nloops, function(){ a = buffalo.parse(x) });
 //   name: NUL-terminated bytes (cannot contain NUL byte!)
 //   value: type-specific value
 
+// zero and sub-normals have 0 expoent, non-numbers all have exponent 7ff
 // NaN: as 64-bit float 01 00 00 00 00 00 f0 7f
-// Infinity: as float   00 00 00 00 00 00 f0 75
+// Infinity: as float   00 00 00 00 00 00 f0 7f
 // -Infinity: as float  00 00 00 00 00 00 f0 ff
 // undefined as type null (0a)
 
