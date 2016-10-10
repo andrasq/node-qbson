@@ -85,6 +85,7 @@ function determineTypeId( value ) {
     case 'boolean': return T_BOOLEAN;
     case 'undefined': return T_UNDEFINED;
     case 'function': return T_FUNCTION;
+    case 'symbol': return T_SYMBOL;
     case 'object': return (value === null) ? T_NULL
         : (Array.isArray(value)) ? T_ARRAY
         : determineClassTypeId(value)
@@ -159,7 +160,7 @@ function guessSize( value ) {
 // with only 3% penalty if having to use the second switch as well.
 function guessVariableSize( id, value ) {
     switch (id) {
-    case T_SYMBOL: return 4 + 3 * value.length + 1;
+    case T_SYMBOL: return 4 + 3 * value.toString().length - 8 + 1;
     case T_FUNCTION: return 4 + 3 * value.toString().length + 1;
     case T_BINARY: return 5 + value.length;
     case T_TIMESTAMP: return 8;
@@ -210,6 +211,8 @@ function encodeEntity( name, value, target, offset ) {
         value = value.toString();
         // and fall through to be handled as a string
     case T_SYMBOL:
+        value = value.toString().slice(7, -1);  // "Symbol(name)" => "name"
+        // and fall through to handle as string
     case T_STRING:
         start = offset;
         offset = putStringZ(value, target, offset+4);
