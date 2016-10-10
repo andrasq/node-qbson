@@ -56,7 +56,9 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             base += 4;
             break;
         case 14:
-            // TODO: handle symbol as distinct from string?
+            base = scanString(buf, base, bound, s0);
+            value = Symbol(s0.val);
+            break;
         case 2:
             base = scanString(buf, base, bound, s0);
             value = s0.val;
