@@ -245,7 +245,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = putStringZ(flags, target, offset);
         break;
     case T_BINARY:
-        offset = putInt32(value.length + 1, target, offset);
+        offset = putInt32(value.length, target, offset);
         target[offset++] = value.subtype || 0;
         value.copy(target, offset);
         offset += value.length;
