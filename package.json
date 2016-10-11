@@ -2,7 +2,7 @@
   "name": "qbson",
   "version": "0.0.10",
   "description": "fast js-only bson encode / decode",
-  "keywords": ["fast", "bson", "buffalo", "Andras"],
+  "keywords": ["fast", "mongo", "mongodb", "bson", "buffalo", "Andras"],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
