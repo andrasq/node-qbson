@@ -87,6 +87,11 @@ ObjectId.prototype.valueOf = function valueOf( ) {              // mongo compat
 }
 
 
+// experimental
+ObjectId.bytesToHex = bytesToHex;
+ObjectId.bytesToBase64 = bytesToBase64;
+
+
 /*----------------------------------------------------------------
  * generate a unique ObjectId into the Buffer (or Array) dst
  * A mongo id is made of (timestamp + machine id + process id + sequence)
@@ -147,19 +152,51 @@ ObjectId.prototype = ObjectId.prototype;        // accelerate access
  */
 
 // extract the byte range as a hex string
+// for 12 bytes 10% faster than buf.toString
 var hexdigits = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' ];
-//var hexpairs = new Array(256); for (var i=0; i<256; i++) hexpairs[i] = ((i < 16 ? '0' : '') + i.toString(16));
+var hexpairs = new Array(256); for (var i=0; i<256; i++) hexpairs[i] = ((i < 16 ? '0' : '') + i.toString(16));
 function bytesToHex( bytes, base, bound ) {
     var str = "";
     for (var i=base; i<bound; i++) {
-        str += hexdigits[bytes[i] >> 4] + hexdigits[bytes[i] & 0x0F];
-        //str += hexpairs[bytes[i]];
-        //str += byteToHex(bytes[i]);
+        //str += hexdigits[bytes[i] >> 4] + hexdigits[bytes[i] & 0x0F];
+        str += hexpairs[bytes[i]];
     }
     return str;
 }
-function byteToHex( byte ) {
-    return hexdigits[byte >> 4] + hexdigits[byte & 0x0F];
+
+// extract the byte range as a base64 string
+// for 12 bytes 10% slower than buf.toString
+var _base64charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+var _base64digits = new Array(64);
+for (var i=0; i<64; i++) _base64digits[i] = _base64charset.slice(i, i+1);
+var _base64pad = ['', '===', '==', '='];
+function bytesToBase64( bytes, base, bound ) {
+    var str = "";
+    for (var i=base; i<bound-3; i+=3) {
+        str += _emit3base64(bytes[i], bytes[i+1], bytes[i+2]);
+    }
+    switch (bound - i) {
+    case 3: str += _emit3base64(bytes[i], bytes[i+1], bytes[i+2]); i += 3; break;
+    case 2: str += _emit2base64(bytes[i], bytes[i+1]); i += 2; break;
+    case 1: str += _emit1base64(bytes[i]); i += 1; break;
+    }
+    if (str.length % 4) str += _base64pad[str.length % 4];
+    return str;
+}
+function _emit3base64( a, b, c ) {
+    return _base64digits[a >> 2] +
+        _base64digits[(a & 0x3) << 4 | (b >> 4)] +
+        _base64digits[(b & 0xF) << 2 | (c >> 6)] +
+        _base64digits[(c & 0x3F)];
+}
+function _emit2base64( a, b ) {
+    return _base64digits[a >> 2] +
+        _base64digits[(a & 0x3) << 4 | (b >> 4)] +
+        _base64digits[(b & 0xF) << 2];
+}
+function _emit1base64( a ) {
+    return _base64digits[a >> 2] +
+        _base64digits[(a & 0x3) << 4];
 }
 
 function hexValue( code ) {
