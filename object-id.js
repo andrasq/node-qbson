@@ -185,18 +185,18 @@ function bytesToBase64( bytes, base, bound ) {
 }
 function _emit3base64( a, b, c ) {
     return _base64digits[a >> 2] +
-        _base64digits[(a & 0x3) << 4 | (b >> 4)] +
-        _base64digits[(b & 0xF) << 2 | (c >> 6)] +
-        _base64digits[(c & 0x3F)];
+           _base64digits[((a << 4) | (b >> 4)) & 0x3F] +
+           _base64digits[((b << 2) | (c >> 6)) & 0x3F] +
+           _base64digits[c & 0x3F];
 }
 function _emit2base64( a, b ) {
     return _base64digits[a >> 2] +
-        _base64digits[(a & 0x3) << 4 | (b >> 4)] +
-        _base64digits[(b & 0xF) << 2];
+           _base64digits[(a & 0x3) << 4 | (b >> 4)] +
+           _base64digits[(b & 0xF) << 2];
 }
 function _emit1base64( a ) {
     return _base64digits[a >> 2] +
-        _base64digits[(a & 0x3) << 4];
+           _base64digits[(a & 0x3) << 4];
 }
 
 function hexValue( code ) {
