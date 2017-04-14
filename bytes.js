@@ -99,6 +99,7 @@ function putInt64( n, target, offset ) {
  *   1 bit sign + 11 bits exponent + (1 implicit mantissa 1 bit) + 52 mantissa bits
  *
  * Originally from `json-simple`, then `qbson.decode` - AR.
+ * SKL 4.5g 52m/s; readFloatLE 15m/s
  */
 var _rshift32 = (1 / 0x100000000);      // >> 32 for floats
 var _rshift20 = (1 / 0x100000);         // >> 20 for floats
@@ -137,6 +138,7 @@ function pow2( exp ) {
                       : (exp > -31 ? (1 / (1 << -exp)) : Math.pow(2, exp));
 }
 
+// SLK 4.5g 23m/s (17m/s if double-copy)
 var _floatBuf = new Buffer(8);
 function putFloat( n, target, offset ) {
     if (target.writeDoubleLE) {

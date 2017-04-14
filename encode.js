@@ -287,8 +287,7 @@ if (process.env['NODE_TEST'] === 'encode') {
 var assert = require('assert');
 var util = require('util');
 var timeit = require('qtimeit');
-var bson = require('bson');
-var BSON = require('bson').BSONPure.BSON;
+var BSON = require('./bson');
 var buffalo = require('buffalo');
 var bson_decode = require('./decode.js');
 var qbson = require('./qbson');
@@ -324,8 +323,8 @@ var data = [1, [2, [3, [4, [5]]]]];     // 1250% (!!)
 var data = {a: undefined};              // 390% long names, 760% short (gets converted to null by all 3 encoders)
 var data = {};                          // 450% with long var names; 715% with short names
 //var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;        // 845%
-//var data = bson.ObjectId("123456781234567812345678");         // 100% base
-//var data = new qbson.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
+//var data = BSON.ObjectId("123456781234567812345678");         // 100% base
+//var data = new QBSON.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
 //var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
 //var data = require('./prod-data.js');   // 500% ?! (with inlined guessSize, only 2x w/o)
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%

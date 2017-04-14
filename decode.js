@@ -236,8 +236,7 @@ if (process.env['NODE_TEST'] === 'decode') {
 ///**
 var timeit = require('qtimeit');
 
-var bson = require('bson');
-var BSON = require('bson').BSONPure.BSON;
+var BSON = require('./bson');
 
 var buffalo = require('buffalo');
 buffalo.deserialize = BSON.parse;
@@ -266,7 +265,7 @@ var data = /fo[o]/i;                    // 30%
 // (note: bson recovers binary as type Binary { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data })
 var data = new Buffer("ABCDE");         // 12%
 var data = new Buffer(66000);           // 15% (or... 20x that can not reproduce??)
-var data = bson.ObjectID();             // 30% own scanString, 17% toString() for property names
+var data = BSON.ObjectID();             // 30% own scanString, 17% toString() for property names
 var data = [1,2,3,4,5];                 // 680% (was 750% in early versions)
 var data = {a: {b: {c: {d: {e: 5}}}}};  // extreme; 2-char var names half the speed!!
 var data = {a2: {b2: {c2: {d2: {e2: 5}}}}};  // extreme; 2-char var names 1/4 the speed?!
@@ -280,7 +279,7 @@ var data = new RegExp("fo\x00o\x00x\x03\x00", "i");     // -98% (ie, bson is 50x
 var data = new RegExp("foo", "i");      // 37%
 var data = ""; while (data.length < 250) data += "foo_\x81";    // 250 ch text with 20% 2-byte utf8
 var data = o;                           // 235% (compound w/ array; 12% w/o)
-var data = bson.ObjectId("123456781234567812345678");
+var data = BSON.ObjectID("123456781234567812345678");
 
 //var data = require("/home/andras/work/src/kds.git/package.json");
 //var data = require("/home/andras/work/src/kds.git/config.json");

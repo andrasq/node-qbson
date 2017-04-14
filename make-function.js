@@ -20,7 +20,7 @@ module.exports = makeFunction;
  * Note that `new Function()' expects just the function code, while bson
  * storese a full the `toString()` function source.  We use eval() to
  * parse the function to not have to split the `function` keyword out
- * of the source code ourselves.  The BSON spect itself implies that
+ * of the source code ourselves.  The BSON spec itself implies that
  * the function is to be eval-d (http://bsonspec.org/spec.html)
  */
 function makeFunction( code, scope ) {
