@@ -327,19 +327,43 @@ var data = {};                          // 450% with long var names; 715% with s
 //var data = new QBSON.ObjectId("123456781234567812345678");    // 215% vs bson.ObjectId()
 //var data = buffalo.ObjectId("123456781234567812345678");      //  75% vs bson.ObjectId()
 //var data = require('./prod-data.js');   // 500% ?! (with inlined guessSize, only 2x w/o)
-var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: new Date(), g: {zz:12.5}, h: [1,2]};   // 978%
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%
 
 var testObj = new Object();
 for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
 //for (var i=0; i<10; i++) testObj['var_' + i] = data;
 
-console.log(bson_encode({a: data}));
-console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
+//console.log(bson_encode({a: data}));
+//console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));
 assert.deepEqual(bson_encode(testObj), BSON.serialize(testObj));
 
-var nloops = 40000;
+var testObj = data;
 var x;
+
+console.log("encoding " + JSON.stringify(testObj));
+
+timeit.bench.timeGoal = 2;
+timeit.bench.visualize = true;
+timeit.bench({
+    'BSON.serialize': function(){ x = BSON.serialize(testObj) },
+    'buffalo.serialize': function(){ x = buffalo.serialize(testObj) },
+    'qbson.encode': function(){ x = bson_encode(testObj) },
+    'JSON.stringify': function(){ x = JSON.stringify(testObj) },
+
+    'bson 2': function(){ x = BSON.serialize(testObj) },
+    'buffalo 2': function(){ x = buffalo.serialize(testObj) },
+    'qbson 2': function(){ x = bson_encode(testObj) },
+    'json 2': function(){ x = JSON.stringify(testObj) },
+
+    'bson 3': function(){ x = BSON.serialize(testObj) },
+    'buffalo 3': function(){ x = buffalo.serialize(testObj) },
+    'qbson 3': function(){ x = bson_encode(testObj) },
+    'json 3': function(){ x = JSON.stringify(testObj) },
+});
+
+/**
+var nloops = 40000;
 timeit(nloops, function(){ x = bson_encode(testObj) });
 timeit(nloops, function(){ x = bson_encode(testObj) });
 timeit(nloops, function(){ x = bson_encode(testObj) });
@@ -359,4 +383,11 @@ timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 console.log(buffalo.serialize({a: data}));
+/**/
+
+//console.log("BSON.serialize:", BSON.serialize({a: data}));
+//console.log("bson_encode:", bson_encode({a: data}));
+//console.log("buffalo.serialize:", buffalo.serialize({a: data}));
+//console.log("JSON.stringify:", JSON.stringify({a: data}));
+
 }

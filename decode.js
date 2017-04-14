@@ -289,7 +289,10 @@ var data = BSON.ObjectID("123456781234567812345678");
 var data = new Array(20); for (var i=0; i<100; i++) data[i] = i;
 var data = Object(); for (var i=0; i<100; i++) data[i] = i;
 var data = 1234.5;
+var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: new Date(), g: {zz:12.5}, h: [1,2]};
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 175%
+
+//var data = o;
 
 var o = new Object();
 //for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
@@ -311,10 +314,9 @@ var x = BSON.serialize(o, false, true);
 //console.log("AR: decoded", BSON.deserialize(x));
 //console.log("AR: parsed", bson_decode(BSON.serialize(o), 0));
 
-console.log(x);
+//console.log(x);
 //console.log("AR: test", bson_decode(x, 0));
 
-console.log(x.length, ":", x, getFloat(x, 7));
 //var a = BSON.deserialize(x);
 //var a = buffalo.parse(x);
 var a;
@@ -341,31 +343,42 @@ for (i=0; i<100000; i++) {
   // v5: 81k/s for Kobj (97k/s v6)
 }
 var t2 = fptime();
-console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[Object.keys(a)[0]]);
+//console.log("AR: time for 100k: %d ms", t2 - t1, process.memoryUsage(), a && a[Object.keys(a)[0]]);
 // init version: 22% faster, 20% less gc (?), less mem used
 
 // warm up the heap (?)... throws off the 2nd timing run if not
 var nloops = 40000;
-timeit(nloops, function(){ a = bson_decode(x) });
-timeit(nloops, function(){ a = bson_decode(x) });
-timeit(nloops, function(){ a = bson_decode(x) });
+//timeit(nloops, function(){ a = bson_decode(x) });
+//timeit(nloops, function(){ a = bson_decode(x) });
+//timeit(nloops, function(){ a = bson_decode(x) });
 //console.log(a && a[Object.keys(a)[0]]);
 
 var json = JSON.stringify(data);
-timeit(nloops, function(){ a = JSON.parse(json) });
+//timeit(nloops, function(){ a = JSON.parse(json) });
 //console.log(json);
 
-timeit.bench.timeGoal = 2;
-timeit.bench({
-    'qbson.decode': function(){ a = bson_decode(x) },
-    'bson.deserialize': function(){ a = BSON.deserialize(x) },
-    'buffalo.parse': function(){ a = buffalo.parse(x) },
+console.log("decoding " + json);
 
-    'qbson2': function(){ a = bson_decode(x) },
-    'bson2': function(){ a = BSON.deserialize(x) },
-    'buffalo2': function(){ a = buffalo.parse(x) },
+timeit.bench.timeGoal = 2;
+timeit.bench.visualize = true;
+timeit.bench({
+    'BSON.deserialize': function(){ a = BSON.deserialize(x) },
+    'buffalo.parse': function(){ a = buffalo.parse(x) },
+    'qbson.decode': function(){ a = bson_decode(x) },
+    'JSON.parse': function(){ a = JSON.parse(json) },
+
+    'bson 2': function(){ a = BSON.deserialize(x) },
+    'buffalo 2': function(){ a = buffalo.parse(x) },
+    'qbson 2': function(){ a = bson_decode(x) },
+    'json 2': function(){ a = JSON.parse(json) },
+
+    'bson 3': function(){ a = BSON.deserialize(x) },
+    'buffalo 3': function(){ a = buffalo.parse(x) },
+    'qbson 3': function(){ a = bson_decode(x) },
+    'json 3': function(){ a = JSON.parse(json) },
 });
 
+/**
 timeit(nloops, function(){ a = BSON.deserialize(x) });
 //console.log(a && a[Object.keys(a)[0]]);
 timeit(nloops, function(){ a = bson_decode(x) });
@@ -374,6 +387,7 @@ timeit(nloops, function(){ a = bson_decode(x) });
 timeit(nloops, function(){ a = buffalo.parse(x) });
 timeit(nloops, function(){ a = buffalo.parse(x) });
 //console.log(a && a[Object.keys(a)[0]]);
+/**/
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
