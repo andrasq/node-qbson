@@ -200,6 +200,9 @@ function encodeEntity( name, value, target, offset ) {
     target[offset++] = typeId = determineTypeId(value);
     offset = putStringZ(name, target, offset);
 
+    // some types are encoded just like strings
+    if (typeId === T_FUNCTION) typeId = T_STRING;
+
     switch (typeId) {
     case T_INT:
         offset = putInt32(value, target, offset);
@@ -207,12 +210,11 @@ function encodeEntity( name, value, target, offset ) {
     case T_FLOAT:
         offset = putFloat(value, target, offset);
         break;
-    case T_FUNCTION:
-        value = value.toString();
-        // and fall through to be handled as a string
     case T_SYMBOL:
         value = value.toString().slice(7, -1);  // "Symbol(name)" => "name"
         // and fall through to handle as string
+    case T_FUNCTION:
+        // function types were changed to string already, fall through
     case T_STRING:
         start = offset;
         offset = putStringZ(value, target, offset+4);
