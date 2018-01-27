@@ -5,6 +5,50 @@ var qbson = require('./qbson.js');
 
 var ObjectId = require('./object-id');
 
+
+id = ObjectId();
+assert.ok(id instanceof ObjectId);
+
+id = new ObjectId();
+assert.ok(id instanceof ObjectId);
+
+id = ({ ObjectId: ObjectId }).ObjectId();
+assert.ok(id instanceof ObjectId);
+
+id = ObjectId("1234ABCD1234");
+assert.equal(String(id), "313233344142434431323334");
+
+id = ObjectId("12341234ABCDABCD12341234");
+assert.equal(String(id), "12341234abcdabcd12341234");
+
+id = ObjectId("010203040A0B0C0D01020304");
+assert.equal(String(id), "010203040a0b0c0d01020304");
+
+id = ObjectId("                        ");
+assert.equal(String(id), "000000000000000000000000");
+
+id = ObjectId(new Buffer("123412341234"));
+assert.ok(id instanceof ObjectId);
+assert.equal(id.toString(), "313233343132333431323334");
+
+id = ObjectId.createFromBuffer(new Buffer([1,2,3,4,1,2,3,4,1,2,3,4]));
+assert.ok(id instanceof ObjectId);
+assert.equal(id.toString(), "010203040102030401020304");
+assert.equal(id.valueOf(), "010203040102030401020304");
+
+
+// should roll across seconds
+var idbuf = [,,,,,,,,,,,,];
+id = new ObjectId();
+for (var i=0; i<10000000; i++) id.generateId(idbuf);
+
+assert.throws(function() { new ObjectId("1234") });
+assert.throws(function() { new ObjectId("123412341234", 2) });
+assert.throws(function() { new ObjectId("123412341234123412341234", 2) });
+assert.throws(function() { new ObjectId(1) });
+assert.throws(function() { new ObjectId(true) });
+
+
 var ids = [
     "000000000000000000000000",
     "ffffffffffffffffffffffff",
@@ -63,6 +107,7 @@ var buf = new Buffer([ 0, 1, 2, 3, 4, 127, 128, 129, 254, 255 ]);
 assert.equal(ObjectId.bytesToHex(buf, 0, buf.length), buf.toString('hex', 0, buf.length));
 
 // bytesToBase64
+// TODO: why is this in ObjectId?
 var x, timeit = require('qtimeit');
 var data = [
     new Buffer([ 1 ]),
@@ -88,8 +133,13 @@ for (var i=0; i<256; i++) {
 //timeit(400000, function(){ x = buf.toString('hex', 0, buf.length) });
 // 3.1m/s base64 or hex, 10x less gc
 // *BUT* 1.2m/s if have to slice a sub-range (...but can pass in base/bound)
+var idbuf = [,,,,,,,,,,,,];
 buf = new Buffer([1,2,3,4,5,6,7,8,9,10,11,12]);
-timeit(400000, function(){ x = ObjectId.bytesToBase64(buf, 0, buf.length) });
+timeit(2000000, function(){ x = new ObjectId() });
+timeit(2000000, function(){ x = new ObjectId("123412341234") });
+timeit(2000000, function(){ x = new ObjectId("123412341234123412341234") });
+timeit(2000000, function(){ x = ObjectId.generateId(idbuf) });
+//timeit(400000, function(){ x = ObjectId.bytesToBase64(buf, 0, buf.length) });
 //timeit(400000, function(){ x = buf.toString('base64', 0, buf.length) });
 //timeit(400000, function(){ x = ObjectId.bytesToHex(buf, 0, buf.length) });
 //timeit(400000, function(){ x = buf.toString('hex', 0, buf.length) });

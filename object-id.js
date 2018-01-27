@@ -1,7 +1,7 @@
 /**
  * fast binary mongodb ObjectId()
  *
- * Copyright (C) 2016 Andras Radics
+ * Copyright (C) 2016,2018 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
@@ -20,28 +20,39 @@ module.exports = ObjectId;
  * - a 4-byte value representing the seconds since the Unix epoch,
  * - a 3-byte machine identifier,
  * - a 2-byte process id, and
- * - a 3-byte counter, starting with a random value.ObjectId
+ * - a 3-byte sequence counter, starting with a random value.ObjectId
  *
  * AR note: the timestamp and sequence are stored in big-endian order,
  * so I store the machine id and pid that way too.  Can't tell how
  * mongo does it, it seems to use random values for machine id and pid.
+ *
+ * Note that on some systems the process id may be longer than 16 bits.
  */
 
 function ObjectId( value, offset ) {
-    if (!this || this === global) return new ObjectId(value, offset);
+    if (! (this instanceof ObjectId)) return new ObjectId(value, offset);
+
     this.str = null;
-    this.bytes = null;
+    this.set = false;
+    this.bytes = [,,,,,,,,,,,,];
+
     if (value) {
-        if (!offset) offset = 0;
         if (typeof value === 'string') this.setFromString(value, offset);
         else if (Buffer.isBuffer(value)) this.setFromBuffer(value, offset);
+        else throw new Error("unknown ObjectId initializer");
     }
 }
+
+// expose certain functions as class methods
+ObjectId.generateId = generateId;
+
+// expose the id generator
+ObjectId.prototype.generateId = generateId;
 
 ObjectId.prototype._get = function _get( ) {
     // generating into a static sparse array is faster than into Array(12) or new Array(12)
     // and into Array(12) is 35% faster than into an initialized array [0,0,...0]
-    return this.bytes ? this.bytes : this.bytes = generateId([,,,,,,,,,,,,]);
+    return this.set ? this.bytes : generateId(this.bytes);
 }
 
 ObjectId.prototype.copyToBuffer = function copyToBuffer( buffer, offset ) {
@@ -56,25 +67,41 @@ ObjectId.prototype.toString = function toString( ) {            // value for str
     return bytesToHex(this._get(), 0, 12);
 }
 ObjectId.prototype.toJSON = ObjectId.prototype.toString;        // value for JSON.stringify
-ObjectId.prototype.inspect = ObjectId.prototype.toString;       // value for console.log
+// if inspect is redefined, util.inspect cannot examine contents.
+// For console.log, cast to string instead.
+//ObjectId.prototype.inspect = ObjectId.prototype.toString;       // value for console.log
 
 ObjectId.createFromBuffer = function createFromBuffer( buf, base ) {
     return new ObjectId().setFromBuffer(buf, base);
 }
 
 ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
-    this.bytes = Array(12);
+    base = base || 0;
+    this.set = true;
     for (var i=0; i<12; i++) {
         this.bytes[i] = buf[base + i];
     }
     return this;
 }
+var hexCodeMap = {
+    0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9,
+    a: 10, b: 11, c: 12, d: 13, e: 14, f: 15,
+    A: 10, B: 11, C: 12, D: 13, E: 14, F: 15,
+};
 ObjectId.prototype.setFromString = function setFromString( s, from ) {
     if (!from) from = 0;
-    this.bytes = Array(12);
-    for (var i=0; i<12; i++) {
-        this.bytes[i] = (hexValue(s.charCodeAt(from+2*i)) << 4) + hexValue(s.charCodeAt(from+2*i+1));
+    this.set = true;
+    this.str = null;
+
+    if (!from && s.length == 12) {
+        for (var i=0; i<12; i++) this.bytes[i] = s.charCodeAt(i);
     }
+    else if (from + 24 <= s.length) {
+        for (var i=0; i<12; i++) this.bytes[i] = (hexValue(s.charCodeAt(from+2*i)) << 4) + hexValue(s.charCodeAt(from+2*i+1));
+        // the above is faster than using hexCodeMap or looping 0...24
+    }
+    else throw new Error("invalid object-id string");
+
     return this;
 }
 
@@ -95,14 +122,16 @@ ObjectId.bytesToBase64 = bytesToBase64;
 /*----------------------------------------------------------------
  * generate a unique ObjectId into the Buffer (or Array) dst
  * A mongo id is made of (timestamp + machine id + process id + sequence)
+ * TODO: the state used for id generation should be inside an object, not global.
  */
 
 // use a random machine id to keep things simple
 var _machId = Math.random() * 0x100000000 >>> 8;
-var _pid = process.pid;
+var _pid = process.pid & 0xFFFF;
 
 // start sequence at a random offset to minimize chance of collision with another machine id
-var _seq = Math.random() * 0x100000000 >>> 8;
+// Do not make the offset too large, else could overflow the sequence too soon.
+var _seq = Math.random() * 0x100000000 >>> 10;
 
 // overflow occurs when the sequence id laps itself within the same second (same "now" period)
 var _lastSeq = _seq;
@@ -208,6 +237,7 @@ function hexValue( code ) {
 
 
 
+/**
 // quicktest:
 if (process.env['NODE_TEST'] === 'object-id') {
 
@@ -256,3 +286,4 @@ var id2 = bson.ObjectId(buf.toString('hex'));
 console.log(id2);
 
 }
+/**/
