@@ -199,6 +199,20 @@ function scanRegExp( buf, base, bound, item ) {
 }
 
 function createRegExp( pattern, flags ) {
+    // NOTE: BSON-1.0.4 omits the flags /uy when encoding, and ignores them when decoding
+    // mongodb documents regex flags /imxs, php documents /imxslu
+    // i - case-insesitive, m - multiline, x - ignore spaces and #-comments, s - "dotall", l - locale, u - unicode
+    //   "multi-line" causes anchors ^ and $ to match newlines too,
+    //   "dotall" treats the input as a single string, newlines are matched by '.';
+    //   however, the javascript `/.../mgi.test("a\nb")` does not match the newline "\n".
+    // Note that the mongo shell supports its own js subset of flags, not those of mongo.
+    // The mongo flags apply to searches done by mongodb itself.
+    // Q: does mongo type-check regex flags when storing them?  Or just when using regexes?
+
+    // mongo knows /g as /s ("dotall"), though the semantics are different.
+    if (flags && flags.indexOf('s') >= 0) flags.replace('s', 'g');
+    // BSON-1.0.4 only decodes the mongo flags /ims, not the other js flags /guy
+
     try {
         return new RegExp(pattern, flags);
     } catch (err) {

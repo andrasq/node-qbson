@@ -244,9 +244,13 @@ function encodeEntity( name, value, target, offset ) {
         offset = putInt64(value.getTime(), target, offset);
         break;
     case T_REGEXP:
-        offset = putStringZ(value.source, target, offset);
-        var flags = (value.global ? 'g' : '') + (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '');
-        // BSON supports additional flags 'l', 'u', 'x' that are not valid in javascript
+        offset = putStringZOverlong(value.source, target, offset);
+        var flags = (value.global ? 's' : '') + (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '');
+        // + (value.unicode ? 'u' : '') + (value.sticky ? 'y' : '');
+        // node-v8 supports additional flags 'u' 'y' of which only 'y' is supported by mongo 3.4 shell, neither by 2.6
+        // Q: will mongo type-check regex flags?  Or just store them as-is?
+        // BSON-1.0.4 omits the /uy flags when encoding and when decoding
+        // BSON supports additional flags 'l', 'x' that are not valid in node v8 or on the mongo command line
         offset = putStringZ(flags, target, offset);
         break;
     case T_BINARY:
@@ -285,6 +289,12 @@ function putString( s, target, offset ) {
     else return offset + target.write(s, offset, 'utf8');
 }
 
+// write a NUL-terminated utf8 string, but overlong-encode embedded NUL bytes
+function putStringZOverlong( s, target, offset ) {
+    offset = utf8.utf8_encodeOverlong(s, 0, s.length, target, offset);
+    target[offset++] = 0;
+    return offset;
+}
 
 // quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
