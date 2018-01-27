@@ -15,11 +15,13 @@
  * The default storage order for the bytes is little-endian (least significant
  * byte at the lowest address).
  *
- * Copyright (C) 2016 Andras Radics
+ * Copyright (C) 2016-2018 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-27 - AR.
  */
+
+var float = require('ieee-float');
 
 module.exports = {
     byteEntity: function(){ return {val: 0, end: 0} },
@@ -94,66 +96,22 @@ function putInt64( n, target, offset ) {
 
 
 /*
- * extract the 64-bit little-endian ieee 754 floating-point value 
- *   see http://en.wikipedia.org/wiki/Double-precision_floating-point_format
- *   1 bit sign + 11 bits exponent + (1 implicit mantissa 1 bit) + 52 mantissa bits
- *
- * Originally from `json-simple`, then `qbson.decode` - AR.
- * SKL 4.5g 52m/s; readFloatLE 15m/s
+ * functions to read and write 32-bit and 64-bit IEEE-754 floating-point
+ * moved into the `ieee-float` package - AR.
  */
-var _rshift32 = (1 / 0x100000000);      // >> 32 for floats
-var _rshift20 = (1 / 0x100000);         // >> 20 for floats
-var _lshift32 = (1 * 0x100000000);      // << 32
-var _rshift52 = (1 * _rshift32 * _rshift20);    // >> 52
+
 function getFloat( buf, pos ) {
-    var lowWord = getUInt32(buf, pos);
-    var highWord = getUInt32(buf, pos+4);
-    var mantissa = (highWord & 0x000FFFFF) * _lshift32 + lowWord;
-    var exponent = (highWord & 0x7FF00000) >> 20;
-    //var sign = (highWord >> 31);
-
-    var value;
-    if (exponent === 0x000) {
-        // zero if !mantissa, else subnormal (non-normalized reduced precision small value)
-        // recover negative zero -0.0 as distinct from 0.0
-        // subnormals do not have an implied leading 1 bit and are positioned 1 bit to the left
-        value = mantissa ? (mantissa * _rshift52) * pow2(-1023 + 1) : 0.0;
-        return (highWord >> 31) ? -value : value;
-    }
-    else if (exponent < 0x7ff) {
-        // normalized value with an implied leading 1 bit and 1023 biased exponent
-        exponent -= 1023;
-        value = (1 + mantissa * _rshift52) * pow2(exponent);
-        return (highWord >> 31) ? -value : value;
-    }
-    else {
-        // Infinity if zero mantissa (+/- per sign), NaN if nonzero mantissa
-        return value = mantissa ? NaN : (highWord >> 31) ? -Infinity : Infinity;
-    }
-}
-// given an exponent n, return 2**n
-// n is always an integer, faster to shift when possible
-function pow2( exp ) {
-    return (exp >= 0) ? (exp <  31 ? (1 << exp) :        Math.pow(2, exp))
-                      : (exp > -31 ? (1 / (1 << -exp)) : Math.pow(2, exp));
+    return float.readDoubleLE(buf, pos);
 }
 
-// SLK 4.5g 23m/s (17m/s if double-copy)
-var _floatBuf = new Buffer(8);
-function putFloat( n, target, offset ) {
-    if (target.writeDoubleLE) {
-        target.writeDoubleLE(n, offset, true);
-        return offset + 8;
-    }
-    else {
-        _floatBuf.writeDoubleLE(n, 0, true);
-        for (var i=0; i<8; i++) target[offset++] = _floatBuf[i];
-        return offset;
-    }
+function putFloat( v, target, offset ) {
+    float.writeDoubleLE(target, v, offset);
+    return offset + 8;
 }
 
 
 // extract a decimal numeric "cstring" as a number
+// Used for bson array indexes, which are stored as numeric strings.
 function scanIntZ( buf, base, entity ) {
     var n = 0;
     for (var i=base; buf[i]; i++) {

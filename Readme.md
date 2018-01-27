@@ -105,6 +105,7 @@ Examines the string, does not use `Buffer.byteLength`.
 Change Log
 ----------
 
+- 0.0.12 - use q-utf8 and ieee-float for conversions
 - 0.0.8 - fix decode Long
 - 0.0.7 - encode complete
 - qmongo-0.3.0 - qmongo with batching and cursor
@@ -114,6 +115,7 @@ Change Log
 - 0.0.3 - cleanups, refactored, timings
 - 0.0.2 - encoder
 - 0.0.1 - decoder
+
 
 Related Work
 ------------
