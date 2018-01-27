@@ -9,6 +9,8 @@
 
 module.exports = ObjectId;
 
+var QTimeout = require('qtimeout');
+
 
 /*----------------------------------------------------------------
  * From https://docs.mongodb.com/v3.0/reference/bson-types/#objectid
@@ -151,12 +153,13 @@ function _incrementSequence( now ) {
 
 // look up the time less frequently, avoid the Date.now() overhead
 var _reuse_now = null;
+var _reuse_timeout = new QTimeout(function(){ _reuse_now = null }).unref();
 
 function generateId( dst ) {
     var now = _reuse_now || Date.now();
     if (!_reuse_now && now % 1000 < 950) {
         _reuse_now = now;
-        setTimeout(function(){ _reuse_now = null }, 1000 - now % 1000 - 50);
+        _reuse_timeout.start(now % 1000 - 50);
     }
     now = (now / 1000) >>> 0;
 

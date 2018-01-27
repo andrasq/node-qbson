@@ -16,6 +16,12 @@
 
   "dependencies": {
     "ieee-float": "0.6",
+    "qtimeout": "0.9.3",
     "q-utf8": "0.1.1"
+  },
+  "scripts": {
+    "test": "node test-object-id.js ",
+    "coverage": "nyc --reporter text --reporter lcov npm test",
+    "clean": "rm -rf .nyc_output coverage"
   }
 }
