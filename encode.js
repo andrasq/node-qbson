@@ -10,8 +10,9 @@
 
 'use strict';
 
+var utf8 = require('q-utf8');
+
 var bytes = require('./bytes.js');
-var utf8 = require('./utf8.js');
 var bsonTypes = require('./bson-types.js');
 
 var ObjectId = bsonTypes.ObjectId;
@@ -31,6 +32,8 @@ module.exports = bson_encode;
 module.exports.guessSize = guessSize;
 module.exports.encodeEntities = encodeEntities;
 module.exports.putInt32 = bytes.putInt32;
+
+// TODO: make undefined encoding configurable, bson skips it
 
 function bson_encode( obj ) {
     // 28% faster to guess at buffer size instead of calcing exact size
@@ -278,7 +281,7 @@ function putStringZ( s, target, offset ) {
 }
 
 function putString( s, target, offset ) {
-    if (s.length < 80) return utf8.encodeUtf8(s, 0, s.length, target, offset);
+    if (s.length < 80) return utf8.utf8_encode(s, 0, s.length, target, offset);
     else return offset + target.write(s, offset, 'utf8');
 }
 

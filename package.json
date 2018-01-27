@@ -12,5 +12,9 @@
   "author": {
     "name": "Andras",
     "url": "http://github.com/andrasq"
+  },
+
+  "dependencies": {
+    "q-utf8": "0.1.1"
   }
 }
