@@ -149,8 +149,17 @@ function _incrementSequence( now ) {
     }
 }
 
+// look up the time less frequently, avoid the Date.now() overhead
+var _reuse_now = null;
+
 function generateId( dst ) {
-    var now = (Date.now() / 1000) >>> 0;
+    var now = _reuse_now || Date.now();
+    if (!_reuse_now && now % 1000 < 950) {
+        _reuse_now = now;
+        setTimeout(function(){ _reuse_now = null }, 1000 - now % 1000 - 50);
+    }
+    now = (now / 1000) >>> 0;
+
     dst[0] = (now >> 24) & 0xFF;
     dst[1] = (now >> 16) & 0xFF;
     dst[2] = (now >>  8) & 0xFF;
