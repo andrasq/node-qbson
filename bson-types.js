@@ -122,10 +122,19 @@ function typeSizes() {
  * time_t value (seconds since the Unix epoch) the second 32 bits are an
  * incrementing ordinal for operations within a given second.
  * (note: stored in little endian format, the second word first)
+ *
+ * NOTE: bson.Timestamp takes (seq, time); we take (time, seq) like mongo.
  */
 function Timestamp( t, i ) {
+    this._bsontype = 'Timestamp';
     this.time = t;
-    this.inc = i;
+    this.seq = i;
+}
+Timestamp.prototype.getHighBits = function getLowBits( ) {
+    return this.time;
+}
+Timestamp.prototype.getLowBits = function getLowBits( ) {
+    return this.seq;
 }
 
 

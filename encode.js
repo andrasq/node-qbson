@@ -270,6 +270,9 @@ function encodeEntity( name, value, target, offset ) {
     case T_MAXKEY:
         break;
     case T_TIMESTAMP:
+        offset = putInt32(value.getLowBits(), target, offset);
+        offset = putInt32(value.getHighBits(), target, offset);
+        break;
     case T_SCOPED_FUNCTION:
     default:
         throw new Error("unsupported entity type " + typeId);
