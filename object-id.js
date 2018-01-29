@@ -34,6 +34,7 @@ var QTimeout = require('qtimeout');
 function ObjectId( value, offset ) {
     if (! (this instanceof ObjectId)) return new ObjectId(value, offset);
 
+    this._bsontype = 'ObjectId';
     this.str = null;
     this.set = false;
     this.bytes = [,,,,,,,,,,,,];
@@ -42,6 +43,7 @@ function ObjectId( value, offset ) {
         if (typeof value === 'string') this.setFromString(value, offset);
         else if (Buffer.isBuffer(value)) this.setFromBuffer(value, offset);
         else throw new Error("unknown ObjectId initializer");
+        // TODO: construct from bson.ObjectID
     }
 }
 
@@ -128,6 +130,7 @@ ObjectId.bytesToBase64 = bytesToBase64;
  */
 
 // use a random machine id to keep things simple
+// TODO: use multiple random ids to avoid the "sequence overflow" error
 var _machId = Math.random() * 0x100000000 >>> 8;
 var _pid = process.pid & 0xFFFF;
 

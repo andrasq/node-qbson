@@ -37,10 +37,15 @@ assert.equal(id.toString(), "010203040102030401020304");
 assert.equal(id.valueOf(), "010203040102030401020304");
 
 
-// should roll across seconds
+// should roll across seconds, should throw on sequence wrap
 var idbuf = [,,,,,,,,,,,,];
 id = new ObjectId();
-for (var i=0; i<10000000; i++) id.generateId(idbuf);
+console.time('generateId');
+for (var i=0; i<1000000; i++) id.generateId(idbuf);             // 77m/s SKL 4.5g
+console.timeEnd('generateId');
+console.time('new id get');
+for (var i=0; i<1000000; i++) { new ObjectId()._get() }         // 44m/s SKL 4.5g
+console.timeEnd('new id get');
 
 assert.throws(function() { new ObjectId("1234") });
 assert.throws(function() { new ObjectId("123412341234", 2) });
@@ -89,15 +94,14 @@ assert(id1 > '');
 // should generate a different id
 var id2 = new ObjectId().toString();
 assert(id2 > '');
-assert(id1 != id2);
+assert(id2 > id1);
 
 // should generate 10k different ids
 var newIds = [];
 var t1 = Date.now();
 for (var i=0; i<10000; i++) newIds.push(new ObjectId().toString());
 var t2 = Date.now();
-newIds.sort();
-for (var i=1; i<10000; i++) assert(newIds[i] != newIds[i-1]);
+for (var i=1; i<10000; i++) assert(newIds[i] > newIds[i-1]);
 
 // time to generate should be < 10ms (ie > 1m/s)
 assert(t2 - t1 < 100);
@@ -136,6 +140,7 @@ for (var i=0; i<256; i++) {
 var idbuf = [,,,,,,,,,,,,];
 buf = new Buffer([1,2,3,4,5,6,7,8,9,10,11,12]);
 timeit(2000000, function(){ x = new ObjectId() });
+timeit(2000000, function(){ x = new ObjectId(buf, 0, 12) });
 timeit(2000000, function(){ x = new ObjectId("123412341234") });
 timeit(2000000, function(){ x = new ObjectId("123412341234123412341234") });
 timeit(2000000, function(){ x = ObjectId.generateId(idbuf) });
