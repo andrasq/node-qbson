@@ -137,12 +137,12 @@ Timestamp.prototype.getLowBits = function getLowBits( ) {
     return this.seq;
 }
 
-
 /*
  * Special type which compares lower than all other possible BSON element values.
  * This is a constant, identified by its type.
  */
 function MinKey( ) {
+    this._bsontype = 'MinKey';
 }
 
 
@@ -151,6 +151,7 @@ function MinKey( ) {
  * This is a constant, identified by its type.
  */
 function MaxKey( ) {
+    this._bsontype = 'MaxKey';
 }
 
 
@@ -158,6 +159,7 @@ function MaxKey( ) {
  * 64-bit integer.  We can read it and write it, but no arithmetic.
  */
 function Long( lowWord, highWord ) {
+    this._bsontype = 'Long';
     this.low32 = lowWord;
     this.high32 = highWord;
 }
@@ -185,6 +187,7 @@ Long.prototype = Long.prototype;
  * We can create objects of this type, thats it.
  */
 function DbRef( name, oid ) {
+    this._bsontype = 'DbRef';
     this.name = name;
     this.oid = oid;
 }
@@ -195,6 +198,7 @@ function DbRef( name, oid ) {
  * Binary is an abstract class to represent user-defined binary types
  */
 function Binary( ) {
+    this._bsontype = 'Binary';
     this.subtype = 0;   // expose "subtype" on all derived classes
     this.length = 0;    // expose "length" (num bytes) on all derived classes
     // override
