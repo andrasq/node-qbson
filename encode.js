@@ -99,22 +99,22 @@ function determineTypeId( value ) {
 // note that eg `Number(3)` is type 'number', but `new Number(3)` is 'object'
 // (same holds for string, bool)
 function determineClassTypeId( value ) {
-    switch (value.constructor.name) {
-    case 'Array': return T_ARRAY;
-    case 'ObjectId': return T_OBJECTID;
-    case 'Date': return T_DATE;
-    case 'RegExp': return T_REGEXP;
-    case 'Buffer': return T_BINARY;
-    case 'Binary': return T_BINARY;
-    case 'Number': return T_FLOAT;
-    case 'String': return T_STRING;
-    case 'Boolean': return T_BOOLEAN;
-    case 'ScopedFunction': return T_SCOPED_FUNCTION;
-    case 'Timestamp': return T_TIMESTAMP;
-    case 'Long': return T_LONG;
-    case 'DbRef': return T_DBREF;
-    case 'MinKey': return T_MINKEY;
-    case 'MaxKey': return T_MAXKEY;
+    switch (value.constructor) {
+    case Array: return T_ARRAY;
+    case ObjectId: return T_OBJECTID;
+    case Date: return T_DATE;
+    case RegExp: return T_REGEXP;
+    case Buffer: return T_BINARY;
+    case Binary: return T_BINARY;
+    case Number: return T_FLOAT;
+    case String: return T_STRING;
+    case Boolean: return T_BOOLEAN;
+    case ScopedFunction: return T_SCOPED_FUNCTION;
+    case Timestamp: return T_TIMESTAMP;
+    case Long: return T_LONG;
+    case DbRef: return T_DBREF;
+    case MinKey: return T_MINKEY;
+    case MaxKey: return T_MAXKEY;
     case undefined:
     default: return T_OBJECT;
     }
