@@ -23,7 +23,7 @@
     "bson": "1.0.4"
   },
   "scripts": {
-    "test": "node test-object-id.js && node test-encode.js ",
+    "test": "node test-object-id.js && node test-encode.js && node test-decode.js ",
     "coverage": "nyc --reporter text --reporter lcov npm test",
     "clean": "rm -rf .nyc_output coverage"
   }

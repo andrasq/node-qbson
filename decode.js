@@ -38,16 +38,16 @@ function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
 }
 
+var _entity = bytes.byteEntity();       // { val, end } tuple
 function getBsonEntities( buf, base, bound, target, asArray ) {
-    var s0 = { val: 0, end: 0 };
     var type, subtype, name, start;
 
     while (base < bound) {
         start = base;
         type = buf[base++];
-        (asArray) ? scanIntZ(buf, base, s0) : scanStringZ(buf, base, s0);
-        name = s0.val;
-        base = s0.end + 1;  // skip string + NUL
+        (asArray) ? scanIntZ(buf, base, _entity) : scanStringZ(buf, base, _entity);
+        name = _entity.val;
+        base = _entity.end + 1;  // skip string + NUL
 
         var value;
         switch (type) {
@@ -56,12 +56,12 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             base += 4;
             break;
         case 14:
-            base = scanString(buf, base, bound, s0);
-            value = Symbol(s0.val);
+            base = scanString(buf, base, bound, _entity);
+            value = Symbol(_entity.val);
             break;
         case 2:
-            base = scanString(buf, base, bound, s0);
-            value = s0.val;
+            base = scanString(buf, base, bound, _entity);
+            value = _entity.val;
             break;
         case 3:
             var len = getUInt32(buf, base);
@@ -78,8 +78,8 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             base += 8;
             break;
         case 5:
-            base = scanBinary(buf, base, bound, s0);
-            value = s0.val;
+            base = scanBinary(buf, base, bound, _entity);
+            value = _entity.val;
             break;
         case 6:
             value = undefined
@@ -100,23 +100,23 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             value = null;
             break;
         case 11:
-            base = scanRegExp(buf, base, bound, s0);
-            value = s0.val;
+            base = scanRegExp(buf, base, bound, _entity);
+            value = _entity.val;
             break;
         case 18:
             value = new Long(getUInt32(buf, base), getUInt32(buf, base+4));
             base += 8;
             break;
         case 13:
-            base = scanString(buf, base, bound, s0);
-            value = bsonTypes.makeFunction(s0.val);
+            base = scanString(buf, base, bound, _entity);
+            value = bsonTypes.makeFunction(_entity.val);
             break;
         case 15:
             // length is redundant, skip +4
-            base = scanString(buf, base+4, bound, s0);
+            base = scanString(buf, base+4, bound, _entity);
             var len = getUInt32(buf, base);
             var scope = getBsonEntities(buf, base+4, base+len-1, new Object())
-            value = bsonTypes.makeFunction(s0.val, scope);
+            value = bsonTypes.makeFunction(_entity.val, scope);
             base += len;
             break;
         case 17:
@@ -130,8 +130,8 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             value = new MaxKey();
             break;
         case 12:
-            base = scanStringZ(buf, base, s0);
-            value = new DbRef(s0.val, new ObjectId().setFromBuffer(buf, base));
+            base = scanStringZ(buf, base, _entity);
+            value = new DbRef(_entity.val, new ObjectId().setFromBuffer(buf, base));
             base += 12;
             break;
         default:
