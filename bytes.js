@@ -22,6 +22,7 @@
  */
 
 var float = require('ieee-float');
+var utf8 = require('q-utf8');
 
 module.exports = {
     byteEntity: function(){ return {val: 0, end: 0} },
@@ -51,6 +52,10 @@ module.exports = {
     putFloat: putFloat,
     putFloat64: putFloat,
     putFloat64LE: putFloat,
+
+    putString: putString,
+    putStringZ: putStringZ,
+    putStringZOverlong: putStringZOverlong,
 
     // ---- scan
     scanIntZ: scanIntZ,
@@ -143,4 +148,24 @@ function scanStringUtf8( buf, base, entity ) {
     }
     entity.val = str;
     return (entity.end = i) + 1;
+}
+
+
+function putStringZ( s, target, offset ) {
+    if (typeof s !== 'string') s = '' + s;
+    offset = putString(s, target, offset);
+    target[offset++] = 0;
+    return offset;
+}
+
+function putString( s, target, offset ) {
+    if (s.length < 80) return utf8.utf8_encode(s, 0, s.length, target, offset);
+    else return offset + target.write(s, offset, 'utf8');
+}
+
+// write a NUL-terminated utf8 string, but overlong-encode embedded NUL bytes
+function putStringZOverlong( s, target, offset ) {
+    offset = utf8.utf8_encodeOverlong(s, 0, s.length, target, offset);
+    target[offset++] = 0;
+    return offset;
 }

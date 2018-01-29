@@ -27,6 +27,9 @@ var ScopedFunction = bsonTypes.ScopedFunction;
 var putInt32 = bytes.putInt32;
 var putInt64 = bytes.putInt64;
 var putFloat = bytes.putFloat64;
+var putString = bytes.putString;
+var putStringZ = bytes.putStringZ;
+var putStringZOverlong = bytes.putStringZOverlong;
 
 module.exports = bson_encode;
 module.exports.guessSize = guessSize;
@@ -280,24 +283,6 @@ function encodeEntity( name, value, target, offset ) {
     return offset;
 }
 
-function putStringZ( s, target, offset ) {
-    if (typeof s !== 'string') s = '' + s;
-    offset = putString(s, target, offset);
-    target[offset++] = 0;
-    return offset;
-}
-
-function putString( s, target, offset ) {
-    if (s.length < 80) return utf8.utf8_encode(s, 0, s.length, target, offset);
-    else return offset + target.write(s, offset, 'utf8');
-}
-
-// write a NUL-terminated utf8 string, but overlong-encode embedded NUL bytes
-function putStringZOverlong( s, target, offset ) {
-    offset = utf8.utf8_encodeOverlong(s, 0, s.length, target, offset);
-    target[offset++] = 0;
-    return offset;
-}
 
 // quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
