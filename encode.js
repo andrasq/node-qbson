@@ -146,8 +146,9 @@ function guessCompoundSize( item ) {
 // estimate the _most_ bytes the value will occupy.  Never guess too low.
 // The first switch maps the common sizes, a second switch the more obscure ones.
 function guessSize( value ) {
-    var id;
-    switch (id = determineTypeId(value)) {
+    var id = determineTypeId(value);
+    // TODO: if (bsonTypes.typeInfo[id].size > 0) return bsonTypes.typeInfo[id].size + bsonTypes.typeInfo[id].fixup;
+    switch (id) {
     case T_INT: return 4;
     case T_FLOAT: return 8;
     case T_STRING: return 4 + 3 * value.length + 1;
@@ -171,7 +172,7 @@ function guessVariableSize( id, value ) {
     case T_BINARY: return 5 + value.length;
     case T_TIMESTAMP: return 8;
     case T_LONG: return 8;
-    case T_DBREF: return 3 * value.name + 1 + 12;
+    case T_DBREF: return 3 * value.name.length + 1 + 12;
     case T_MINKEY: return 0;
     case T_MAXKEY: return 0;
 
@@ -266,8 +267,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = value.put(target, offset);
         break;
     case T_DBREF:
-        offset = putStringZ(value.name, target, offset);
-        offset = value.oid.copyToBuffer(target, offset);
+        offset = value.put(target, offset);
         break;
     case T_MINKEY:
     case T_MAXKEY:

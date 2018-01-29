@@ -57,7 +57,7 @@ function typeIds() { return {
     T_DATE: 9,                  // Date.now() timestamp stored as 64-bit LE integer
     T_NULL: 10,                 // 0B
     T_REGEXP: 11,               // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
-    T_DBREF: 12,                // deprecated
+    T_DBREF: 12,                // deprecated, now { $ref, $id, $db } object: stringZ ns, 12B ObjectID
     T_FUNCTION: 13,             // function source
     T_SYMBOL: 14,               // just like string
     T_SCOPED_FUNCTION: 15,      // 4B length, "function(){}" string entity, scope object entity
@@ -185,13 +185,25 @@ Long.prototype = Long.prototype;
 /*
  * DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
  * We can create objects of this type, thats it.
+ * FIXME: how is this actually stored by mongo?  bson stores { $ref: namespace, $id: oid, $db: db }
  */
 function DbRef( name, oid ) {
     this._bsontype = 'DbRef';
     this.name = name;
-    this.oid = oid;
+    this.oid =  (oid instanceof ObjectId) ? oid : new ObjectId(oid);
 }
-// TODO: add get and put methods to the class.
+var entity = bytes.byteEntity();
+DbRef.prototype.get = function get( buf, base ) {
+    base = bytes.scanStringZ(buf, base, entity)
+    this.name = entity.val;
+    this.oid = new ObjectId(buf, base);
+    return base + 12;
+}
+DbRef.prototype.put = function put( buf, offset ) {
+    offset = bytes.putStringZOverlong(this.name, buf, offset);
+    offset = this.oid.copyToBuffer(buf, offset);
+    return offset;
+}
 
 
 /*
