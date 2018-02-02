@@ -86,7 +86,7 @@ var T_BINARY_USER_DEFINED = 5;  // subtype 128
 // TODO: distinguish symbol from string
 function determineTypeId( value ) {
     switch (typeof value) {
-    case 'number': return ((value|0) === value) ? T_INT : T_FLOAT; // also NaN and +/- Infinity
+    case 'number': return ((value >> 0) === value) ? T_INT : T_FLOAT; // also NaN and +/- Infinity
     case 'string': return T_STRING;
     case 'boolean': return T_BOOLEAN;
     case 'undefined': return T_UNDEFINED;
@@ -109,7 +109,7 @@ function determineClassTypeId( value ) {
     case RegExp: return T_REGEXP;
     case Buffer: return T_BINARY;
     case Binary: return T_BINARY;
-    case Number: return T_FLOAT;
+    case Number: return ((value >> 0) === value) ? T_INT : T_FLOAT;
     case String: return T_STRING;
     case Boolean: return T_BOOLEAN;
     case ScopedFunction: return T_SCOPED_FUNCTION;
