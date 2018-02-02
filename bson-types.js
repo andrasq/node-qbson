@@ -6,7 +6,7 @@
  * Also includes bson compatibility functions for passing bson types
  * eg Timestamp or MinKey, which is useful.
  *
- * Copyright (C) 2016 Andras Radics
+ * Copyright (C) 2016,2018 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-18 - AR.
@@ -157,11 +157,21 @@ function MaxKey( ) {
 
 /*
  * 64-bit integer.  We can read it and write it, but no arithmetic.
+ * NOTE: bson.Long takes (lo, hi); we take (hi, lo).
  */
-function Long( lowWord, highWord ) {
+function Long( highWord, lowWord ) {
     this._bsontype = 'Long';
-    this.low32 = lowWord;
-    this.high32 = highWord;
+    if (arguments.length === 2 && typeof arguments[0] === 'number' && typeof arguments[1] === 'number') {
+        this.low32 = arguments[1];
+        this.high32 = arguments[0];
+    }
+//    else if (typeof arguments[0] === 'string' && arguments[0][0] === '0' && arguments[0][1] === 'x') {
+//        this.low32 = parseInt(arguments[0].slice(-8), 16);
+//        this.high32 = parseInt(arguments[0].slice(0, -8), 16);
+//    }
+    else {
+        throw new Error("usage: Long(high, low)");
+    }
 }
 Long.prototype.get = function get( buf, base ) {
     this.low32 = bytes.getUInt32(buf, base);
@@ -173,7 +183,7 @@ Long.prototype.put = function put( buf, offset ) {
     return offset + 8;
 }
 Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
-    return new Long(n & 0xFFFFFFFF, n / 0x100000000 >>> 0);
+    return new Long(n / 0x100000000 >>> 0, n & 0xFFFFFFFF);
 }
 Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
     if ((this.high32 & 0x1FFFFF) === 0) return this.high32 * 0x100000000 + this.low32;

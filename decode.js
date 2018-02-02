@@ -5,7 +5,7 @@
  *
  * See also http://bsonspec.org/spec.html
  *
- * Copyright (C) 2015-2016 Andras Radics
+ * Copyright (C) 2015-2016,2018 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
@@ -104,7 +104,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             value = _entity.val;
             break;
         case 18:
-            value = new Long(getUInt32(buf, base), getUInt32(buf, base+4));
+            value = new Long(getUInt32(buf, base+4), getUInt32(buf, base));
             base += 8;
             break;
         case 13:
