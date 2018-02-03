@@ -5,7 +5,7 @@
  * with the js `with` keyword.  However, `with` is not allowed
  * in 'use strict' mode, so move it here and run it non-strict.
  *
- * Copyright (C) 2016 Andras Radics
+ * Copyright (C) 2016,2018 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-21 - AR.
@@ -25,8 +25,9 @@ module.exports = makeFunction;
  */
 function makeFunction( code, scope ) {
     try {
+        if (!code) throw new Error('missing function definition');
         // eval(code) returns nothing for a function definition, so set f
-        // (or could coerce to an expression with eval("false||"+code)
+        // (or could coerce to an expression with eval("false||"+code))
         code = "var f = " + code;
         if (scope) with (scope) eval(code); else eval(code)
         return f;
