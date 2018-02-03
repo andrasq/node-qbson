@@ -10,22 +10,35 @@ var data = [
     [ "string", "1300000002610007000000737472696e670000" ],
     [ new Buffer("AAAA"), "1100000005610004000000004141414100" ],
     [ Symbol("Symbol Name"), "180000000e61000c00000053796d626f6c204e616d650000" ],
-    [ undefined, "0800000006610a00" ],
+    // NOTE: bson encodes `undefined` as value `null`
+    // [ undefined, "0800000006610000" ],       // T_UNDEFINED
+    [ undefined, "080000000a610000" ],          // T_NULL
     [ qbson.ObjectId('0102030405060708090a0b0c'), "14 00 00 00 07 61 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 00" ],
     [ new qbson.Timestamp(1, 2), "10 00 00 00 11 61 00 02 00 00 00 01 00 00 00 00" ],
-    // [ new bsonTypes.DbRef("collname", new bsonTypes.ObjectId("12345678abcd")), "1d0000000c6100636f6c6c6e616d650031323334353637386162636400" ],
     [ new qbson.Long(0x10000000, 2), "10000000126100020000000000001000" ],
     [ new qbson.MinKey(), "08000000ff610000" ],
     [ new qbson.MaxKey(), "080000007f610000" ],
 
     [ new String("abc"), "10000000 02 6100 04000000 61626300 00" ],
     // NOTE: BSON.serialize encodes `new Number(1)` as the empty object {}
-    // TODO: [ new Number(1.5), "0c000000 10 6100 01000000 00" ]
-    // FIXME: [ new Number(1), "0c000000 10 6100 01000000 00" ]
+    [ new Number(1), "0c000000 10 6100 01000000 00" ],
+    [ new Number(1.5), "10000000 01 6100 000000000000f83f 00" ],
+    [ new Boolean(true), "09000000 08 6100 01 00" ],
+    [ new Boolean(false), "09000000 08 6100 00 00" ],
+    // TODO: [ new bsonTypes.Binary("foo"), "..." ],
+    [ {x:1, y:null}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <0a 7900> 00 } 00 }" ],
+    // FIXME: how should this encode? include y, or omit? Include as null, or undefined?  (bson omits by default)
+    // We encode undefined as T_NULL likemongodb.
+    [ {x:1, y:undefined}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <0a 7900> 00 } 00 }" ],
+
+    // encodes as { $ref: "foo", $id: ObjectId() }
+    [ new bsonTypes.DbRef("foo", new bsonTypes.ObjectId("000000000000")),
+        "{ 2c000000 03 6100 { 24000000 <02 2472656600 04000000 666f6f00> <07 24696400 303030303030303030303030> 00 } 00 }" ],
+    [ [undefined], "0d000000 04 6100 [ 05000000 00 ] 00" ],
 ];
 for (var i=0; i<data.length; i++) {
     // squeeze out spaces from the hex string, for easier cut-and-paste
-    data[i][1] = data[i][1].replace(/ /g, "");
+    data[i][1] = data[i][1].replace(/[^0-9a-fA-F]/g, "");
 
     //var bson = BSON.serialize({ a: data[i] });
     //console.log("AR:", bson.length, bson);
