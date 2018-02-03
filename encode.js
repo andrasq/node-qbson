@@ -237,7 +237,8 @@ function encodeEntity( name, value, target, offset ) {
         offset = value.copyToBuffer(target, offset);
         break;
     case T_BOOLEAN:
-        target[offset++] = value ? 1 : 0;
+        // new Boolean() is an object, truthy even when false; coerce to value
+        target[offset++] = +value ? 1 : 0;
         break;
 /**
     case T_UNDEFINED:
