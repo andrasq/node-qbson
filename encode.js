@@ -92,7 +92,8 @@ function determineTypeId( value ) {
     case 'function': return T_FUNCTION;
     case 'symbol': return T_SYMBOL;
     case 'object': return (value === null) ? T_NULL
-        : (Array.isArray(value)) ? T_ARRAY
+        //: (Array.isArray(value)) ? T_ARRAY
+        : (value.constructor === Array) ? T_ARRAY
         : determineClassTypeId(value)
     }
 }
@@ -102,7 +103,7 @@ function determineTypeId( value ) {
 // (same holds for string, bool)
 function determineClassTypeId( value ) {
     switch (value.constructor) {
-    case Array: return T_ARRAY;
+    //case Array: return T_ARRAY; // handled above
     case ObjectId: return T_OBJECTID;
     case Date: return T_DATE;
     case RegExp: return T_REGEXP;
@@ -203,7 +204,12 @@ function encodeEntities( obj, target, offset ) {
 function encodeEntity( name, value, target, offset ) {
     var start, typeId;
 
-    target[offset++] = typeId = determineTypeId(value);
+    typeId = determineTypeId(value);
+
+    // some types are automatically converted
+    if (typeId === T_UNDEFINED) typeId = T_NULL;
+
+    target[offset++] = typeId;
     offset = putStringZ(name, target, offset);
 
     // some types are encoded just like strings
@@ -233,10 +239,10 @@ function encodeEntity( name, value, target, offset ) {
     case T_BOOLEAN:
         target[offset++] = value ? 1 : 0;
         break;
+/**
     case T_UNDEFINED:
-        // encode the deprecated `undefined` as null
-        target[offset-1] = T_NULL;
         break;
+**/
     case T_NULL:
         break;
     case T_OBJECT:
