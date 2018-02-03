@@ -102,14 +102,14 @@ function determineTypeId( value ) {
 // note that eg `Number(3)` is type 'number', but `new Number(3)` is 'object'
 // (same holds for string, bool)
 function determineClassTypeId( value ) {
+console.log("AR: determ ", value, value.constructor);
     switch (value.constructor) {
     //case Array: return T_ARRAY; // handled above
     case ObjectId: return T_OBJECTID;
     case Date: return T_DATE;
     case RegExp: return T_REGEXP;
     case Buffer: return T_BINARY;
-    case Binary: return T_BINARY;
-    case Number: return ((value >> 0) === value) ? T_INT : T_FLOAT;
+    case Number: return ((value >> 0) === +value) ? T_INT : T_FLOAT;
     case String: return T_STRING;
     case Boolean: return T_BOOLEAN;
     case ScopedFunction: return T_SCOPED_FUNCTION;
