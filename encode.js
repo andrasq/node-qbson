@@ -102,7 +102,6 @@ function determineTypeId( value ) {
 // note that eg `Number(3)` is type 'number', but `new Number(3)` is 'object'
 // (same holds for string, bool)
 function determineClassTypeId( value ) {
-console.log("AR: determ ", value, value.constructor);
     switch (value.constructor) {
     //case Array: return T_ARRAY; // handled above
     case ObjectId: return T_OBJECTID;
@@ -118,7 +117,6 @@ console.log("AR: determ ", value, value.constructor);
     case DbRef: return T_DBREF;
     case MinKey: return T_MINKEY;
     case MaxKey: return T_MAXKEY;
-    case undefined:
     default: return T_OBJECT;
     }
 }
@@ -208,6 +206,10 @@ function encodeEntity( name, value, target, offset ) {
 
     // some types are automatically converted
     if (typeId === T_UNDEFINED) typeId = T_NULL;
+    if (typeId === T_DBREF) {
+        typeId = T_OBJECT;
+        value = { $ref: value.$ref, $id: value.$id };
+    }
 
     target[offset++] = typeId;
     offset = putStringZ(name, target, offset);
@@ -272,11 +274,13 @@ function encodeEntity( name, value, target, offset ) {
     case T_LONG:
         offset = value.put(target, offset);
         break;
+/**
     case T_DBREF:
         // mongod encodes a DbRef as a type 3 object with fields $ref and $id (and maybe $db?)
         var dbref = { $ref: value.$ref, $id: value.$id };
         offset = encodeEntity(name, dbref, target, start);
         break;
+**/
     case T_MINKEY:
     case T_MAXKEY:
         break;
