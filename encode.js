@@ -21,7 +21,6 @@ var MinKey = bsonTypes.MinKey;
 var MaxKey = bsonTypes.MaxKey;
 var Long = bsonTypes.Long;
 var DbRef = bsonTypes.DbRef;
-var Binary = bsonTypes.Binary;
 var ScopedFunction = bsonTypes.ScopedFunction;
 
 var putInt32 = bytes.putInt32;
@@ -172,7 +171,7 @@ function guessVariableSize( id, value ) {
     case T_BINARY: return 5 + value.length;
     case T_TIMESTAMP: return 8;
     case T_LONG: return 8;
-    case T_DBREF: return 3 * value.name.length + 1 + 12;
+    case T_DBREF: return guessSize({ $ref: value.$ref, $id: value.$id, $db: value.$db });
     case T_MINKEY: return 0;
     case T_MAXKEY: return 0;
 
@@ -267,7 +266,9 @@ function encodeEntity( name, value, target, offset ) {
         offset = value.put(target, offset);
         break;
     case T_DBREF:
-        offset = value.put(target, offset);
+        // mongod encodes a DbRef as a type 3 object with fields $ref and $id (and maybe $db?)
+        var dbref = { $ref: value.$ref, $id: value.$id };
+        offset = encodeEntity(name, dbref, target, start);
         break;
     case T_MINKEY:
     case T_MAXKEY:
@@ -284,7 +285,7 @@ function encodeEntity( name, value, target, offset ) {
 }
 
 
-// quicktest:
+/** quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
 
 var assert = require('assert');
@@ -365,7 +366,7 @@ timeit.bench({
     'json 3': function(){ x = JSON.stringify(testObj) },
 });
 
-/**
+if (0) {
 var nloops = 40000;
 timeit(nloops, function(){ x = bson_encode(testObj) });
 timeit(nloops, function(){ x = bson_encode(testObj) });
@@ -386,7 +387,7 @@ timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 timeit(nloops, function(){ x = buffalo.serialize(testObj) });
 console.log(buffalo.serialize({a: data}));
-/**/
+}
 
 //console.log("BSON.serialize:", BSON.serialize({a: data}));
 //console.log("bson_encode:", bson_encode({a: data}));
@@ -394,3 +395,4 @@ console.log(buffalo.serialize({a: data}));
 //console.log("JSON.stringify:", JSON.stringify({a: data}));
 
 }
+/**/

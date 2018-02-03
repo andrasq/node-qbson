@@ -37,7 +37,6 @@ module.exports = {
     MinKey: MinKey,
     MaxKey: MaxKey,
     DbRef: DbRef,
-    Binary: Binary,
     ScopedFunction: ScopedFunction,
 
     // function with or without scope builder
@@ -197,40 +196,29 @@ Long.prototype = Long.prototype;
  * We can create objects of this type, thats it.
  * FIXME: how is this actually stored by mongo?  bson stores { $ref: namespace, $id: oid, $db: db }
  */
-function DbRef( name, oid ) {
+function DbRef( ref, id ) {
     this._bsontype = 'DbRef';
-    this.name = name;
-    this.oid =  (oid instanceof ObjectId) ? oid : new ObjectId(oid);
+    this.$ref = ref;
+    this.$id = id;      // (oid instanceof ObjectId) ? oid : new ObjectId(oid); -- not: anything can be an object-id
+    // The mongo shell DBRef() takes expects exactly two arguments, ref and id; no db.
+    // this.$db = db;
 }
 var entity = bytes.byteEntity();
+// NOTUSED: obsolete format
 DbRef.prototype.get = function get( buf, base ) {
     base = bytes.scanStringZ(buf, base, entity)
-    this.name = entity.val;
-    this.oid = new ObjectId(buf, base);
+    this.$ref = entity.val;
+    this.$id = new ObjectId(buf, base);
     return base + 12;
 }
+// NOTUSED: obsolete format
 DbRef.prototype.put = function put( buf, offset ) {
-    offset = bytes.putStringZOverlong(this.name, buf, offset);
-    offset = this.oid.copyToBuffer(buf, offset);
+    // mongod encodes it as a type 3 object { $ref: <name>, $id: <oid> }
+    // The below implementation is obsolete.
+    offset = bytes.putStringZOverlong(this.$ref, buf, offset);
+    offset = this.$id.copyToBuffer(buf, offset);
     return offset;
 }
-
-
-/*
- * Binary is an abstract class to represent user-defined binary types
- */
-function Binary( ) {
-    this._bsontype = 'Binary';
-    this.subtype = 0;   // expose "subtype" on all derived classes
-    this.length = 0;    // expose "length" (num bytes) on all derived classes
-    // override
-}
-// abstracat method to copy out the binary data into the target buffer
-// starting at position offset
-Binary.prototype.copy = function copy( buf, offset ) {
-    // override
-}
-Binary.prototype = Binary.prototype;
 
 
 /*
