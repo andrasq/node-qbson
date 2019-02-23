@@ -37,7 +37,7 @@ data.  Includes JSON.stringify timings for comparison.  These are _rates_, highe
 is better.
 
 | data               | bson | buffalo | qbson | json |
-|-------------------------|-----|-----|------|------|
+|-------------------------|-----|----:|-----:|-----:|
 | `1234`                  | 100 | 175 |  240 |  375 |
 | `1234.5`                | 100 | 135 |  239 |  234 |
 | `"some \xfftf8 Text"`   | 100 | 111 |  196 |  365 |
@@ -60,7 +60,7 @@ As above, but decoding.
 Yes, JSON can be up to 140x faster than BSON.
 
 | data               | bson | buffalo | qbson | json |
-|-------------------------|-----|-----|------|-------|
+|-------------------------|-----|----:|-----:|------:|
 | `1234`                  | 100 | 100 |  109 | 10000 |
 | `1234.5`                | 100 | 100 |  113 |  4115 |
 | `"some \xfftf8 Text"`   | 100 | 101 |   99 |  6760 |
