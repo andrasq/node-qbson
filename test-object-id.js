@@ -110,29 +110,6 @@ assert(t2 - t1 < 100);
 var buf = new Buffer([ 0, 1, 2, 3, 4, 127, 128, 129, 254, 255 ]);
 assert.equal(ObjectId.bytesToHex(buf, 0, buf.length), buf.toString('hex', 0, buf.length));
 
-// bytesToBase64
-// TODO: why is this in ObjectId?
-var x, timeit = require('qtimeit');
-var data = [
-    new Buffer([ 1 ]),
-    new Buffer([ 1, 1 ]),
-    new Buffer([ 1, 1, 1 ]),
-    new Buffer([ 1, 1, 1, 1 ]),
-    new Buffer([ 1, 1, 1, 1, 1 ]),
-    new Buffer([ 255 ]),
-    new Buffer([ 255, 255 ]),
-    new Buffer([ 255, 255, 255 ]),
-    new Buffer([ 0, 1, 2, 3, 4, 127, 128, 129, 254, 255 ]),
-];
-for (var i=0; i<data.length; i++) {
-    var buf = data[i];
-    assert.equal(ObjectId.bytesToBase64(buf, 0, buf.length), buf.toString('base64', 0, buf.length));
-}
-var buf = new Buffer(1);
-for (var i=0; i<256; i++) {
-    buf[0] = i;
-    assert.equal(ObjectId.bytesToBase64(buf, 0, 1), buf.toString('base64'));
-}
 //timeit(400000, function(){ x = buf.toString('hex') });
 //timeit(400000, function(){ x = buf.toString('hex', 0, buf.length) });
 // 3.1m/s base64 or hex, 10x less gc
@@ -144,12 +121,9 @@ timeit(2000000, function(){ x = new ObjectId(buf, 0, 12) });
 timeit(2000000, function(){ x = new ObjectId("123412341234") });
 timeit(2000000, function(){ x = new ObjectId("123412341234123412341234") });
 timeit(2000000, function(){ x = ObjectId.generateId(idbuf) });
-//timeit(400000, function(){ x = ObjectId.bytesToBase64(buf, 0, buf.length) });
-//timeit(400000, function(){ x = buf.toString('base64', 0, buf.length) });
 //timeit(400000, function(){ x = ObjectId.bytesToHex(buf, 0, buf.length) });
 //timeit(400000, function(){ x = buf.toString('hex', 0, buf.length) });
 // sw loop is faster up to 6 bytes (2 iterations)
 // 2.8m/s base64, 6.6m/s hex (hexPairs)
 //console.log("AR: expect", buf.toString('base64'));
-//console.log("AR:    got", ObjectId.bytesToBase64(buf, 0, buf.length));
 //console.log("AR: mem", process.memoryUsage());
