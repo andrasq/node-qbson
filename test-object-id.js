@@ -110,6 +110,10 @@ assert(t2 - t1 < 100);
 var buf = new Buffer([ 0, 1, 2, 3, 4, 127, 128, 129, 254, 255 ]);
 assert.equal(ObjectId.bytesToHex(buf, 0, buf.length), buf.toString('hex', 0, buf.length));
 
+/**
+var timeit = require('qtimeit');
+var x;
+
 //timeit(400000, function(){ x = buf.toString('hex') });
 //timeit(400000, function(){ x = buf.toString('hex', 0, buf.length) });
 // 3.1m/s base64 or hex, 10x less gc
@@ -127,3 +131,4 @@ timeit(2000000, function(){ x = ObjectId.generateId(idbuf) });
 // 2.8m/s base64, 6.6m/s hex (hexPairs)
 //console.log("AR: expect", buf.toString('base64'));
 //console.log("AR: mem", process.memoryUsage());
+/**/
