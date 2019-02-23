@@ -129,7 +129,7 @@ function Timestamp( t, i ) {
     this.time = t;
     this.seq = i;
 }
-Timestamp.prototype.getHighBits = function getLowBits( ) {
+Timestamp.prototype.getHighBits = function getHighBits( ) {
     return this.time;
 }
 Timestamp.prototype.getLowBits = function getLowBits( ) {
