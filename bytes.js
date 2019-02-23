@@ -95,7 +95,16 @@ function getInt64( buf, pos ) {
 
 function putInt64( n, target, offset ) {
     putInt32(n, target, offset);
-    putInt32(n / 0x100000000, target, offset+4);
+    if (n >= 0) {
+        n /= 0x100000000;
+        putInt32(n, target, offset+4);
+    } else {
+        n = (n / 0x100000000);
+        // if remaining fraction is smaller than |1|, rest is all sign bit
+        if (!(n <= -1)) putInt32(-1, target, offset+4);
+        // else cancel the +1 inherent in the separate 2s-complement conversion of the hiword
+        else putInt32(n - 1, target, offset+4);
+    }
     return offset + 8;
 }
 
