@@ -139,7 +139,7 @@ function scanIntZ( buf, base, entity ) {
 function scanStringZ( buf, base, entity ) {
     for (var i=base; buf[i]; i++) ;
     // breakeven is around 13 chars (node 5; more with node 6)
-    if (i < base + 12) return scanStringUtf8(buf, base, entity);
+    if (i < base + 12 || buf instanceof Array) return scanStringUtf8(buf, base, entity);
     entity.val = buf.toString('utf8', base, i);
     return (entity.end = i) + 1;
 }
@@ -168,7 +168,7 @@ function putStringZ( s, target, offset ) {
 }
 
 function putString( s, target, offset ) {
-    if (s.length < 80) return utf8.utf8_encode(s, 0, s.length, target, offset);
+    if (s.length < 80 || target instanceof Array) return utf8.utf8_encode(s, 0, s.length, target, offset);
     else return offset + target.write(s, offset, 'utf8');
 }
 
