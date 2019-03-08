@@ -160,17 +160,8 @@ function MaxKey( ) {
  */
 function Long( highWord, lowWord ) {
     this._bsontype = 'Long';
-    if (arguments.length === 2 && typeof arguments[0] === 'number' && typeof arguments[1] === 'number') {
-        this.low32 = arguments[1];
-        this.high32 = arguments[0];
-    }
-//    else if (typeof arguments[0] === 'string' && arguments[0][0] === '0' && arguments[0][1] === 'x') {
-//        this.low32 = parseInt(arguments[0].slice(-8), 16);
-//        this.high32 = parseInt(arguments[0].slice(0, -8), 16);
-//    }
-    else {
-        throw new Error("usage: Long(high, low)");
-    }
+    this.high32 = +highWord;
+    this.low32 = +lowWord;
 }
 Long.prototype.get = function get( buf, base ) {
     this.low32 = bytes.getUInt32(buf, base);
