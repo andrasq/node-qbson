@@ -40,13 +40,17 @@ module.exports.putInt32 = bytes.putInt32;
 function bson_encode( obj ) {
     // 28% faster to guess at buffer size instead of calcing exact size
     // it is 23% slower to compose into an array and then make that into a buffer
-    var buf = new Buffer(guessSize(obj));
+    // var buf = new Buffer(guessSize(obj));
+
+    // node-v6 and up are much faster writing an array than a Buffer, so convert at the end
+    // It is much faster to allocate an empty zero-length array than to guess at the size.
+    var buf = new Array();
 
     var offset = encodeEntities(obj, buf, 0);
+    return new Buffer(buf);
 
     // if buffer size was close enough, use it
     if (buf.length <= 2 * offset) return buf.slice(0, offset);
-
     var ret = new Buffer(offset);
     buf.copy(ret);
     return ret;
@@ -268,7 +272,8 @@ function encodeEntity( name, value, target, offset ) {
     case T_BINARY:
         offset = putInt32(value.length, target, offset);
         target[offset++] = value.subtype || 0;
-        value.copy(target, offset);
+        for (var i = 0; i < value.length; i++) target[offset + i] = value[i];
+        // value.copy(target, offset); // -- do not rely on Buffer methods
         offset += value.length;
         break;
     case T_LONG:
