@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2019 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ */
+
 var qtimeit = require('qtimeit');
 
 var qbson = require('./');

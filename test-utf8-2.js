@@ -1,3 +1,10 @@
+/**
+ * streamlined utf8 read/write
+ *
+ * Copyright (C) 2019 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ */
+
 'use strict';
 
 var utf8 = require('./utf8-2');

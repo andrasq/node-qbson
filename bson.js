@@ -1,5 +1,8 @@
 /*
  * shim to unify the apis of the various incarnations of the bson package
+ *
+ * Copyright (C) 2017 Andras Radics
+ * Licensed under the Apache License, Version 2.0
  */
 
 var bson = require('bson-v0.3.2');

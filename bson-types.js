@@ -1,13 +1,13 @@
 /**
  * bson type info.  Not really useful, a switch is faster.
  *
+ * Copyright (C) 2016,2018-2019 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * See also http://bsonspec.org/spec.html
  *
  * Also includes bson compatibility functions for passing bson types
  * eg Timestamp or MinKey, which is useful.
- *
- * Copyright (C) 2016,2018-2019 Andras Radics
- * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-18 - AR.
  */

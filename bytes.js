@@ -1,6 +1,9 @@
 /**
  * Byte handling, read and write data to/from byte arrays.
  *
+ * Copyright (C) 2016-2019 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ *
  * The `get` functions take a byte array and return the value at offset
  * or between the offset and bound.
  *
@@ -14,9 +17,6 @@
  *
  * The default storage order for the bytes is little-endian (least significant
  * byte at the lowest address).
- *
- * Copyright (C) 2016-2018 Andras Radics
- * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-27 - AR.
  */

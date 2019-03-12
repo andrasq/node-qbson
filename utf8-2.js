@@ -1,7 +1,7 @@
 /**
  * streamlined utf8 read/write
  *
- * Copyright (C) 2016-2018 Andras Radics
+ * Copyright (C) 2016-2019 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
