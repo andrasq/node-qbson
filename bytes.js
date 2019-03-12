@@ -22,7 +22,7 @@
  */
 
 var float = require('ieee-float');
-var utf8 = require('q-utf8');
+var utf8 = require('./utf8-2');
 
 module.exports = {
     byteEntity: function(){ return {val: 0, end: 0} },
@@ -168,13 +168,13 @@ function putStringZ( s, target, offset ) {
 }
 
 function putString( s, target, offset ) {
-    if (s.length < 80 || target instanceof Array) return utf8.utf8_encode(s, 0, s.length, target, offset);
+    if (s.length < 50 || target instanceof Array) return utf8.write(target, offset, s, 0, s.length);
     else return offset + target.write(s, offset, 'utf8');
 }
 
 // write a NUL-terminated utf8 string, but overlong-encode embedded NUL bytes
 function putStringZOverlong( s, target, offset ) {
-    offset = utf8.utf8_encodeOverlong(s, 0, s.length, target, offset);
+    offset = utf8.write(target, offset, s, 0, s.length, true);
     target[offset++] = 0;
     return offset;
 }
