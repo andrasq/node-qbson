@@ -5,6 +5,11 @@ var qbson = require('./qbson.js');
 
 var ObjectId = require('./object-id');
 
+module.exports = {
+    'pause for _getNow timers to expire': function(t) {
+        setTimeout(t.done.bind(t), 200);
+    },
+}
 
 id = ObjectId();
 assert.ok(id instanceof ObjectId);
@@ -41,8 +46,8 @@ assert.equal(id.valueOf(), "010203040102030401020304");
 var idbuf = [,,,,,,,,,,,,], x;
 id = new ObjectId();
 console.time('generateId');
-for (var i=0; i<20000000; i++) id.generateId(idbuf);            // 55m/s SKL 4.5g if didnt pause
-setTimeout(function(){}, 100);
+// generate enough ids to guarantee at least one sequence wrap
+for (var i=0; i<10000000; i++) id.generateId(idbuf);            // 55m/s SKL 4.5g if didnt pause
 console.timeEnd('generateId');
 console.time('new id get');
 for (var i=0; i<1000000; i++) { new ObjectId()._get() }         // 44m/s SKL 4.5g
@@ -112,6 +117,13 @@ for (var i=1; i<10000; i++) assert(newIds[i] > newIds[i-1], newIds[i-1] + ' -> '
 
 // time to generate should be < 10ms (ie > 1m/s)
 assert(t2 - t1 < 100);
+
+// should wrap sequence
+var id1 = new ObjectId().toString();
+ObjectId._setSeq(0x1000000);
+var id2 = new ObjectId().toString();
+assert(id2.slice(-6) == '000000');
+assert(id2.slice(0, 8) > id1.slice(0, 8), id1 + ' -> ' + id2);
 
 // bytesToHex
 var buf = new Buffer([ 0, 1, 2, 3, 4, 127, 128, 129, 254, 255 ]);

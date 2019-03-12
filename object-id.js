@@ -1,7 +1,7 @@
 /**
  * fast binary mongodb ObjectId()
  *
- * Copyright (C) 2016,2018 Andras Radics
+ * Copyright (C) 2016,2018-2019 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
@@ -153,19 +153,27 @@ function _incrementSequence( ) {
 
 // look up the time less frequently, avoid the Date.now() overhead
 var _reuse_now = null;
-var _reuse_timeout = new QTimeout(function(){ _reuse_now = null }).unref();
+var _timeout_running = false;
+var _reuse_timeout = new QTimeout(function(){ _reuse_now = null; _timeout_running = false }).unref();
 function _getNow( ) {
     if (_getNowCount++ > 200) {
         _reuse_now = null;
         _getNowCount = 0;
     }
     var now = _reuse_now || Date.now();
-    if (!_reuse_now && now % 1000 < 990) {
+    if (!_reuse_now && now % 100 < 90) {
         _reuse_now = now;
-        _reuse_timeout.start(990 - (now % 1000));
+        if (!_timeout_running) {
+            _reuse_timeout.start(90 - (now % 100));
+            _timeout_running = true;
+        }
     }
     return (now / 1000) >>> 0;
 }
+
+// for testing
+function _setSeq( seq ) { _seq = seq }
+ObjectId._setSeq = _setSeq;
 
 function generateId( dst ) {
     var now = _incrementSequence();
