@@ -87,11 +87,6 @@ ObjectId.prototype.setFromBuffer = function setFromBuffer( buf, base ) {
     }
     return this;
 }
-var hexCodeMap = {
-    0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9,
-    a: 10, b: 11, c: 12, d: 13, e: 14, f: 15,
-    A: 10, B: 11, C: 12, D: 13, E: 14, F: 15,
-};
 ObjectId.prototype.setFromString = function setFromString( s, from ) {
     if (!from) from = 0;
     this.set = true;
@@ -102,7 +97,6 @@ ObjectId.prototype.setFromString = function setFromString( s, from ) {
     }
     else if (from + 24 <= s.length) {
         for (var i=0; i<12; i++) this.bytes[i] = (hexValue(s.charCodeAt(from+2*i)) << 4) + hexValue(s.charCodeAt(from+2*i+1));
-        // the above is faster than using hexCodeMap or looping 0...24
     }
     else throw new Error("invalid object-id string");
 
@@ -195,15 +189,10 @@ ObjectId.prototype = ObjectId.prototype;        // accelerate access
  */
 
 // extract the byte range as a hex string
-// for 12 bytes 10% faster than buf.toString
-var hexdigits = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' ];
-var hexpairs = new Array(256); for (var i=0; i<256; i++) hexpairs[i] = ((i < 16 ? '0' : '') + i.toString(16));
+var hexpairs = new Array(256); for (var i=0; i<256; i++) hexpairs[i] = (i < 16 ? ('0' + i.toString(16)) : i.toString(16));
 function bytesToHex( bytes, base, bound ) {
     var str = "";
-    for (var i=base; i<bound; i++) {
-        //str += hexdigits[bytes[i] >> 4] + hexdigits[bytes[i] & 0x0F];
-        str += hexpairs[bytes[i]];
-    }
+    for (var i=base; i<bound; i++) str += hexpairs[bytes[i]];
     return str;
 }
 
