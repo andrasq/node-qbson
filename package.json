@@ -2,17 +2,13 @@
   "name": "qbson",
   "version": "0.0.13",
   "description": "fast js-only bson encode / decode",
-  "keywords": ["fast", "mongo", "mongodb", "bson", "buffalo", "Andras"],
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/andrasq/node-qbson"
-  },
   "main": "qbson.js",
-  "author": {
-    "name": "Andras",
-    "url": "http://github.com/andrasq"
-  },
+
+  "author": "andrasq",
+  "repository": { "type": "git", "url": "git://github.com/andrasq/node-qbson" },
+  "keywords": ["fast", "mongo", "mongodb", "bson", "buffalo", "Andras"],
+  "readme": "see Readme.md in the repo",
 
   "dependencies": {
     "ieee-float": "0.6",
