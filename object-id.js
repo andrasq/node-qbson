@@ -5,6 +5,20 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+/*
+ * https://docs.mongodb.com/manual/reference/bson-types/
+ * defines ObjectId:
+ *   - a 4-byte value representing the seconds since the Unix epoch,
+ *   - a 5-byte random value, and
+ *   - a 3-byte counter, starting with a random value.
+ * It also cautions that ObjectId's are not monotonic, because
+ * ids created during the same second do not have a guaranteed order.
+ *
+ * TODO: implement as ell/lib/id.js: 32 bits seconds, 10 bits milliseconds,
+ * 36 bits system id, 18 bits sequence number, monotonically increasing.
+ * (toString() to return base64-ish string, not hex)
+ */
+
 'use strict';
 
 module.exports = ObjectId;
