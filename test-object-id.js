@@ -38,14 +38,21 @@ assert.equal(id.valueOf(), "010203040102030401020304");
 
 
 // should roll across seconds, should throw on sequence wrap
-var idbuf = [,,,,,,,,,,,,];
+var idbuf = [,,,,,,,,,,,,], x;
 id = new ObjectId();
 console.time('generateId');
-for (var i=0; i<1000000; i++) id.generateId(idbuf);             // 77m/s SKL 4.5g
+for (var i=0; i<20000000; i++) id.generateId(idbuf);            // 55m/s SKL 4.5g if didnt pause
+setTimeout(function(){}, 100);
 console.timeEnd('generateId');
 console.time('new id get');
 for (var i=0; i<1000000; i++) { new ObjectId()._get() }         // 44m/s SKL 4.5g
 console.timeEnd('new id get');
+console.time('bytesToHex');
+for (var i=0; i<1000000; i++) ObjectId.bytesToHex(idbuf, 0, 12);
+console.timeEnd('bytesToHex');
+console.time('setFromString');
+for (var i=0; i<1000000; i++) id.setFromString('123456789abc123456789abc');
+console.timeEnd('setFromString');
 
 assert.throws(function() { new ObjectId("1234") });
 assert.throws(function() { new ObjectId("123412341234", 2) });
@@ -101,7 +108,7 @@ var newIds = [];
 var t1 = Date.now();
 for (var i=0; i<10000; i++) newIds.push(new ObjectId().toString());
 var t2 = Date.now();
-for (var i=1; i<10000; i++) assert(newIds[i] > newIds[i-1]);
+for (var i=1; i<10000; i++) assert(newIds[i] > newIds[i-1], newIds[i-1] + ' -> ' + newIds[i]);
 
 // time to generate should be < 10ms (ie > 1m/s)
 assert(t2 - t1 < 100);
