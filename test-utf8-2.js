@@ -59,6 +59,14 @@ module.exports = {
             t.done();
         },
 
+        'should write FFFD for invalid charcode': function(t) {
+            var buf = [0xDC, 0x01, 0xDC, 0x00];
+            var buf = [0, 0, 0, 0, 0, 0, 0, 0];
+            utf8.write(buf, 0, "\uDC01\uDC00");
+            t.deepEqual(buf, [0xEF, 0xBF, 0xBD, 0xEF, 0xBF, 0xBD, 0, 0]);
+            t.done();
+        },
+
         'should write a substring': function(t) {
             var buf = [0, 0, 0, 0, 0, 0, 0, 0];
             utf8.write(buf, 0, "Hello, world.", 3, 8);
@@ -117,6 +125,18 @@ module.exports = {
             t.equal(utf8.read([0xC0, 0x87]), "\x07");
             t.equal(utf8.read([0xE0, 0x80, 0x87]), "\x07");
             t.equal(utf8.read([0xF0, 0x80, 0x80, 0x87]), "\x07");
+            t.done();
+        },
+
+        'should reject invalid 1-byte charcode': function(t) {
+            t.equal(utf8.read([0x41, 0x91, 0x42]), "A\uFFFDB");
+            t.done();
+        },
+
+        'should reject a surrogate codepoint': function(t) {
+            t.equal(utf8.read([0xF0, 0x80, 0x80, 0x80]), "\u0000");
+            // overlong-encode the invalid codepoint D800 (leading surrogate) as 4 bytes F0.8D.A0.80
+            t.equal(utf8.read([0x41, 0xF0, 0x8D, 0xa0, 0x80, 0x42]), "A\uFFFDB");
             t.done();
         },
 
