@@ -146,6 +146,20 @@ function scanStringZ( buf, base, entity ) {
 
 // get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
 // concatenating chars generates more gc activity, and is only faster for short strings
+// 1-byte utf8 0xxx xxxx
+// 2-byte utf8 110x xxxx 10xx xxxx
+// 3-byte utf8 1110 xxxx 10xx xxxx 10xx xxxx
+// 4-byte utf8 1111 0xxx 10xx xxxx 10xx xxxx 10xx xxxx -- not valid as javascript chars
+// Note: String.fromCharCode() uses low 16 bits and breaks 4-byte utf8 chars.
+
+// FIXME: Leading, also called high, surrogates are from D80016 to DBFF16, and trailing, or
+// low, surrogates are from DC0016 to DFFF16. They are called surrogates, since they do not
+// represent characters directly, but only as a pair.
+//
+// Unpaired surrogates are invalid in UTFs. These include any value in the range D80016 to
+// DBFF16 not followed by a value in the range DC0016 to DFFF16, or any value in the range
+// DC0016 to DFFF16 not preceded by a value in the range D80016 to DBFF16.
+
 function scanStringUtf8( buf, base, entity ) {
     var ch, str = "", code;
     for (var i=base; buf[i]; i++) {
