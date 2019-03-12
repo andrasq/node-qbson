@@ -6,10 +6,14 @@
  * Also includes bson compatibility functions for passing bson types
  * eg Timestamp or MinKey, which is useful.
  *
- * Copyright (C) 2016,2018 Andras Radics
+ * Copyright (C) 2016,2018-2019 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2016-05-18 - AR.
+ */
+
+/*
+ * Spec at http://bsonspec.org/
  */
 
 'use strict';
@@ -58,15 +62,16 @@ function typeIds() { return {
     T_REGEXP: 11,               // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
     T_DBREF: 12,                // deprecated, now { $ref, $id, $db } object: stringZ ns, 12B ObjectID
     T_FUNCTION: 13,             // function source
-    T_SYMBOL: 14,               // just like string
-    T_SCOPED_FUNCTION: 15,      // 4B length, "function(){}" string entity, scope object entity
+    T_SYMBOL: 14,               // deprecated, just like string
+    T_SCOPED_FUNCTION: 15,      // 4B tot length, "function(){}" string(2), scope key-value mappings object(3)
     T_INT: 16,                  // 32-bit LE signed twos complement
     T_TIMESTAMP: 17,            // special bson type: 32-bit time(), 32-bit increment as 64-bit LE
     T_LONG: 18,                 // 64-bit LE signed twos complement
+    //T_FLOAT128: 19            // 128-bit LE IEEE 754 float
     T_MINKEY: 255,              // special value which sorts before all other possible bson entities
     T_MAXKEY: 127,              // special value which sorts after all other possible bson entites
 
-    T_BINARY_GENERIC: 0,        // subtypes 0-127 are mongo reserved
+    T_BINARY_GENERIC: 0,        // subtypes 0-127 are mongo reserved, 128-255 are user-defined
     T_BINARY_FUNCTION: 1,       
     T_BINARY_OLD: 2,            // used to be the generic default subtype
     T_BINARY_UUID_OLD: 3,       // used to be the uuid subtype
@@ -91,7 +96,7 @@ function typeInfo() { return [
     { id: typeIds.T_DBREF,              key: 'T_DBREF',         name: 'DbRef',          size: -1,  fixup: 0 },
     { id: typeIds.T_FUNCTION,           key: 'T_FUNCTION',      name: 'Function',       size: -1,  fixup: 4 },
     { id: typeIds.T_SYMBOL,             key: 'T_SYMBOL',        name: 'Symbol',         size: -1,  fixup: 4 },
-    { id: typeIds.T_SCOPED_FUNCTION,  key: 'T_SCOPED_FUNCTION', name: 'ScopedFunction', size: -1,  fixup: 4 },   // TODO: how is this encoded?
+    { id: typeIds.T_SCOPED_FUNCTION,  key: 'T_SCOPED_FUNCTION', name: 'ScopedFunction', size: -1,  fixup: 4 },
     { id: typeIds.T_INT,                key: 'T_INT',           name: 'Int',            size:  4,  fixup: 0 },
     { id: typeIds.T_TIMESTAMP,          key: 'T_TIMESTAMP',     name: 'Timestamp',      size:  8,  fixup: 0 },
     { id: typeIds.T_LONG,               key: 'T_LONG',          name: 'Long',           size:  8,  fixup: 0 },
@@ -173,6 +178,7 @@ Long.prototype.put = function put( buf, offset ) {
     return offset + 8;
 }
 Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
+    // FIXME: this breaks for negative values... eg -1
     return new Long(n / 0x100000000 >>> 0, n & 0xFFFFFFFF);
 }
 Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
@@ -216,7 +222,7 @@ DbRef.prototype.put = function put( buf, offset ) {
  * class to represent scoped functions to make them encodable
  */
 function ScopedFunction( func, scope ) {
+    this._bsontype = 'ScopedCode';
     this.func = func;
     this.scope = scope;
 }
-

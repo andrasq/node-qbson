@@ -43,7 +43,7 @@ function bson_encode( obj ) {
     // var buf = new Buffer(guessSize(obj));
 
     // node-v6 and up are much faster writing an array than a Buffer, so convert at the end
-    // It is much faster to allocate an empty zero-length array than to guess at the size.
+    // It is much faster to populate an empty array than to guess at the final size.
     var buf = new Array();
 
     var offset = encodeEntities(obj, buf, 0);
@@ -177,8 +177,8 @@ function guessVariableSize( id, value ) {
     case T_DBREF: return guessSize({ $ref: value.$ref, $id: value.$id, $db: value.$db });
     case T_MINKEY: return 0;
     case T_MAXKEY: return 0;
+    case T_SCOPED_FUNCTION: return 4 + guessSize(T_FUNCTION, value.func) + guessSize(T_OBJECT, value.scope);
 
-    case T_SCOPED_FUNCTION:
     default: throw new Error("unknown size of " + (typeof value));
     }
 }
