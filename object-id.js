@@ -129,7 +129,7 @@ var _pid = process.pid & 0xFFFF;
 
 // start sequence at a random offset to minimize chance of collision with another machine id
 // Do not make the offset too large, else could overflow the sequence too soon.
-var _seq = Math.random() * 0x100000000 >>> 10;
+var _seq = Math.random() * 0x1000000 >>> 2;
 
 // overflow occurs when the sequence id laps itself within the same second (same "now" period)
 var _lastSeq = _seq;
