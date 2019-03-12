@@ -10,8 +10,6 @@
 
 'use strict';
 
-var utf8 = require('q-utf8');
-
 var bytes = require('./bytes.js');
 var bsonTypes = require('./bson-types.js');
 
@@ -26,7 +24,6 @@ var ScopedFunction = bsonTypes.ScopedFunction;
 var putInt32 = bytes.putInt32;
 var putInt64 = bytes.putInt64;
 var putFloat = bytes.putFloat64;
-var putString = bytes.putString;
 var putStringZ = bytes.putStringZ;
 var putStringZOverlong = bytes.putStringZOverlong;
 
@@ -177,7 +174,7 @@ function guessVariableSize( id, value ) {
     case T_DBREF: return guessSize({ $ref: value.$ref, $id: value.$id, $db: value.$db });
     case T_MINKEY: return 0;
     case T_MAXKEY: return 0;
-    case T_SCOPED_FUNCTION: return 4 + guessSize(T_FUNCTION, value.func) + guessSize(T_OBJECT, value.scope);
+    case T_SCOPED_FUNCTION: return 4 + guessSize(String(value.func)) + guessSize(value.scope);
 
     default: throw new Error("unknown size of " + (typeof value));
     }
@@ -210,10 +207,10 @@ function encodeEntity( name, value, target, offset ) {
 
     // some types are automatically converted
     if (typeId === T_UNDEFINED) typeId = T_NULL;
-    if (typeId === T_DBREF) {
-        typeId = T_OBJECT;
-        value = { $ref: value.$ref, $id: value.$id };
-    }
+    // if (typeId === T_DBREF) {
+    //     typeId = T_OBJECT;
+    //     value = { $ref: value.$ref, $id: value.$id };
+    // }
 
     target[offset++] = typeId;
     offset = putStringZ(name, target, offset);
@@ -279,13 +276,12 @@ function encodeEntity( name, value, target, offset ) {
     case T_LONG:
         offset = value.put(target, offset);
         break;
-/**
     case T_DBREF:
-        // mongod encodes a DbRef as a type 3 object with fields $ref and $id (and maybe $db?)
-        var dbref = { $ref: value.$ref, $id: value.$id };
-        offset = encodeEntity(name, dbref, target, start);
+        // deprecated format, even mongod shell encodes it as a type 3 object { $ref, $id }
+        var mark = offset;
+        offset = putStringZ(value.$ref, target, offset);
+        offset = value.$id.copyToBuffer(target, offset);
         break;
-**/
     case T_MINKEY:
     case T_MAXKEY:
         break;
@@ -294,12 +290,25 @@ function encodeEntity( name, value, target, offset ) {
         offset = putInt32(value.getHighBits(), target, offset);
         break;
     case T_SCOPED_FUNCTION:
+        var mark = offset;
+        offset = putString(value.func, target, offset + 4);
+        offset = encodeEntities(value.scope, target, offset);
+        putInt32(offset - mark, target, mark);
+        break;
+
     default:
         throw new Error("unsupported entity type " + typeId);
     }
     return offset;
 }
 
+function putString( str, target, offset ) {
+    var start = offset;
+    offset = bytes.putString(str, target, offset + 4);
+    target[offset++] = 0;
+    putInt32(offset - start - 4, target, start);
+    return offset;
+}
 
 /** quicktest:
 if (process.env['NODE_TEST'] === 'encode') {
