@@ -67,7 +67,7 @@ function utf8_read( buf, base, bound ) {
     for (var i=base; i<bound; i++) {
         var ch = buf[i];
         if (ch < 0x80) str += String.fromCharCode(ch);
-        // else if (ch < 0xC0) str += BADCHAR;
+        else if (ch < 0xC0) str += BADCHAR;
         else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) << 6) | (buf[++i] & 0x3F));
         else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) | ((buf[++i] & 0x3F) << 6) | (buf[++i] & 0x3F));
         else { str += utf8_read4(buf, i); i += 4 - 1 }
@@ -76,7 +76,7 @@ function utf8_read( buf, base, bound ) {
 }
 function utf8_read4(buf, i) {
     var codepoint = ((buf[i] & 0x03) << 18) | ((buf[++i] & 0x3F) << 12) |  ((buf[++i] & 0x3F) << 6) |  (buf[++i] & 0x3F);
-    // if (codepoint >= 0xD800 && codepoint <= 0xDFFF) return BADCHAR;  // reserved surrogate pair codepoint
+    if (codepoint >= 0xD800 && codepoint <= 0xDFFF) return BADCHAR;  // reserved surrogate pair codepoint
     return (codepoint < 0x10000)
         ? String.fromCharCode(codepoint)                                        // overlong-encoded utf16
         : String.fromCharCode(0xD800 | ((codepoint - 0x10000) >> 10) & 0x3FF) + // surrogate pair
