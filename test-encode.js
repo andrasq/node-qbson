@@ -31,9 +31,12 @@ var data = [
     // We encode undefined as T_NULL likemongodb.
     [ {x:1, y:undefined}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <0a 7900> 00 } 00 }" ],
 
-    // encodes as { $ref: "foo", $id: ObjectId() }
-    [ new bsonTypes.DbRef("foo", new bsonTypes.ObjectId("000000000000")),
-        "{ 2c000000 03 6100 { 24000000 <02 2472656600 04000000 666f6f00> <07 24696400 303030303030303030303030> 00 } 00 }" ],
+    // encodes as DbRef: asciiz refname, ObjectId
+    // NOTE: decoding this format breaks bson
+//    [ new bsonTypes.DbRef("foo", new bsonTypes.ObjectId("000000000000")),
+//        "{ 18000000 0c 6100 { 666f6f00 303030303030303030303030 } 00" ],
+    // X encodes as { $ref: "foo", $id: ObjectId() }
+    //    "{ 2c000000 03 6100 { 24000000 <02 2472656600 04000000 666f6f00> <07 24696400 303030303030303030303030> 00 } 00 }" ],
     [ [undefined], "0d000000 04 6100 [ 05000000 00 ] 00" ],
 ];
 for (var i=0; i<data.length; i++) {
