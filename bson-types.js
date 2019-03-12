@@ -169,8 +169,8 @@ function Long( highWord, lowWord ) {
     this.low32 = +lowWord;
 }
 Long.prototype.get = function get( buf, base ) {
-    this.low32 = bytes.getUInt32(buf, base);
-    this.high32 = bytes.getUInt32(buf, base+4);
+    this.low32 = bytes.getInt32(buf, base);
+    this.high32 = bytes.getInt32(buf, base+4);
 }
 Long.prototype.put = function put( buf, offset ) {
     bytes.putInt32(this.low32, buf, offset);
@@ -184,6 +184,7 @@ Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
     ret.get(tmpbuf8, 0);
     return ret;
 }
+// Note: having a valueOf() method makes util.inspect report that this is a Number
 Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
     this.put(tmpbuf8, 0);
     return bytes.getInt64(tmpbuf8, 0);
@@ -226,6 +227,11 @@ DbRef.prototype.put = function put( buf, offset ) {
  */
 function ScopedFunction( func, scope ) {
     this._bsontype = 'ScopedCode';
-    this.func = func;
+    this.func = String(func);
     this.scope = scope;
+}
+ScopedFunction.prototype.valueOf = function valueOf( ) {
+    var fn = makeFunction(this.func, this.scope);
+    fn._scope = this.scope;
+    return fn;
 }
