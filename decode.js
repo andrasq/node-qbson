@@ -20,6 +20,7 @@ var MinKey = bsonTypes.MinKey;
 var MaxKey = bsonTypes.MaxKey;
 var Long = bsonTypes.Long;
 var DbRef = bsonTypes.DbRef;
+var ScopedFunction = bsonTypes.ScopedFunction;
 
 var getInt32 = bytes.getInt32;
 var getUInt32 = bytes.getUInt32;
@@ -115,9 +116,10 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
         case 15:
             // length is redundant, skip +4
             base = scanString(buf, base+4, bound, _entity);
+            var source = _entity.val;
             var len = getUInt32(buf, base);
-            var scope = getBsonEntities(buf, base+4, base+len-1, new Object())
-            value = bsonTypes.makeFunction(_entity.val, scope);
+            var scope = getBsonEntities(buf, base+4, base+len-1, {});
+            value = new ScopedFunction(source, scope);
             base += len;
             break;
         case 17:
@@ -137,7 +139,6 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             break;
         default:
             throw new Error("unsupported bson entity type 0x" + type.toString(16) + " at offset " + start);
-            break;
         }
 
         target[name] = value;
