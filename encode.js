@@ -351,8 +351,10 @@ var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: new Dat
 var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 650%
 
 var testObj = new Object();
-for (var i=0; i<10; i++) testObj['someLongishVariableName_' + i] = data;
-//for (var i=0; i<10; i++) testObj['var_' + i] = data;
+var o = testObj;
+for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
+//for (var i=0; i<10; i++) o['someLongishVariableName_' + i] = data;                      // 25 ch
+//for (var i=0; i<10; i++) o['var_' + i] = data;                                          // 5 ch
 
 //console.log(bson_encode({a: data}));
 //console.log(util.inspect(BSON.deserialize(bson_encode({a: data})), {depth: 6}));

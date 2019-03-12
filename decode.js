@@ -246,9 +246,8 @@ function scanBinary( buf, base, bound, item ) {
 }
 
 
-// quicktest:
+/** quicktest:
 if (process.env['NODE_TEST'] === 'decode') {
-///**
 var timeit = require('qtimeit');
 
 var BSON = require('./bson');
@@ -310,15 +309,15 @@ var data = {a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null};  // 175%
 //var data = o;
 
 var o = new Object();
-//for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
-for (var i=0; i<10; i++) o['someLongishVariableName_' + i] = data;                // 25 ch
+for (var i=0; i<10; i++) o['variablePropertyNameOfALongerLength_' + i] = data;          // 37 ch var names
+//for (var i=0; i<10; i++) o['someLongishVariableName_' + i] = data;                      // 25 ch
 //for (var i=0; i<10; i++) o['variablePropertyName_' + i] = data;                         // 26 ch var names
 //for (var i=0; i<10; i++) o['varNameMiddle_' + i] = data;                                // 15 ch var names
 //for (var i=0; i<10; i++) o['varNameS_' + i] = data;                                     // 10 ch var names
 //for (var i=0; i<10; i++) o['var_' + i] = data;                                          // 5 ch var names
 
 var fptime = function fptime() { var t = process.hrtime(); return t[0] + t[1] * 1e-9; }
-var x = BSON.serialize(o, false, true);
+// var x = BSON.serialize(o, false, true);
 //console.log("AR: bson =", x);
 //var x = BSON.serialize({a: 1, b: 2, c: [1,2,3], d: 4, e: 5});
 //var x = BSON.serialize({a: [1]});
@@ -368,6 +367,8 @@ var nloops = 40000;
 //timeit(nloops, function(){ a = bson_decode(x) });
 //console.log(a && a[Object.keys(a)[0]]);
 
+var x = BSON.serialize(o);
+x = BSON.serialize(data);
 var json = JSON.stringify(data);
 //timeit(nloops, function(){ a = JSON.parse(json) });
 //console.log(json);
@@ -393,16 +394,14 @@ timeit.bench({
     'json 3': function(){ a = JSON.parse(json) },
 });
 
-/**
-timeit(nloops, function(){ a = BSON.deserialize(x) });
-//console.log(a && a[Object.keys(a)[0]]);
-timeit(nloops, function(){ a = bson_decode(x) });
-timeit(nloops, function(){ a = BSON.deserialize(x) });
-timeit(nloops, function(){ a = bson_decode(x) });
-timeit(nloops, function(){ a = buffalo.parse(x) });
-timeit(nloops, function(){ a = buffalo.parse(x) });
-//console.log(a && a[Object.keys(a)[0]]);
-/**/
+//timeit(nloops, function(){ a = BSON.deserialize(x) });
+////console.log(a && a[Object.keys(a)[0]]);
+//timeit(nloops, function(){ a = bson_decode(x) });
+//timeit(nloops, function(){ a = BSON.deserialize(x) });
+//timeit(nloops, function(){ a = bson_decode(x) });
+//timeit(nloops, function(){ a = buffalo.parse(x) });
+//timeit(nloops, function(){ a = buffalo.parse(x) });
+////console.log(a && a[Object.keys(a)[0]]);
 
 // object layout: 4B length (including terminating 0x00), then repeat: (1B type, name-string, 0x00, value), 0x00 terminator
 
@@ -420,5 +419,5 @@ timeit(nloops, function(){ a = buffalo.parse(x) });
 //     [1, , 3] is encoded to (and decodes as) [1, null, 3]
 
 
-/**/
 }
+/**/
