@@ -1,7 +1,7 @@
 'use strict';
 
 var assert = require('assert');
-var makeFunction = require('./make-function');
+var makeFunction = require('../make-function');
 
 var src = 'function() { return 1 }';
 assert.ok(typeof makeFunction(src), 'function');

@@ -19,7 +19,7 @@
   },
 
   "scripts": {
-    "test": "for f in test-*.js ; do echo $f: && qnit $f || return 2; done",
+    "test": "qnit test/test-* || return 2; done",
     "coverage": "nyc --reporter text --reporter lcov npm test",
     "clean": "rm -rf .nyc_output coverage"
   }

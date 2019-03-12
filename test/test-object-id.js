@@ -1,9 +1,9 @@
 'use strict';
 
 var assert = require('assert');
-var qbson = require('./qbson.js');
+var qbson = require('../qbson.js');
 
-var ObjectId = require('./object-id');
+var ObjectId = require('../object-id');
 
 module.exports = {
     'pause for _getNow timers to expire': function(t) {

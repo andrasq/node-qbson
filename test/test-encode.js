@@ -2,8 +2,8 @@
 
 var assert = require('assert');
 var BSON = new (require('bson'))();
-var qbson = require('./qbson');
-var bsonTypes = require('./bson-types');
+var qbson = require('../qbson');
+var bsonTypes = require('../bson-types');
 
 // tests by expected encoded hex string
 var data = [
