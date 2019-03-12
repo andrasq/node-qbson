@@ -93,7 +93,7 @@ module.exports = {
             console.timeEnd('write 24');
 
             console.time('buf.write 24');
-            for (var i=0; i<100000; i++) x = buf.write(str);
+            if (buf instanceof Buffer) for (var i=0; i<100000; i++) x = buf.write(str);
             console.timeEnd('buf.write 24');
             // breakeven around 28
 
@@ -154,12 +154,14 @@ module.exports = {
             console.timeEnd('read 16');
 
             var buf = new Buffer("xxxxxxxxxxxxxxxxxxxxxxxx");
+            // note: 2.3x faster to utf8.read from Uint8Array vs Buffer
+            //buf = new Uint8Array(8);
             console.time('read 24');
             for (var i=0; i<1000000; i++) x = utf8.read(buf, 0, buf.length);
             console.timeEnd('read 24');
 
             console.time('buf.toString 24');
-            for (var i=0; i<1000000; i++) x = buf.toString('utf8', 0, buf.length);
+            if (buf instanceof Buffer) for (var i=0; i<1000000; i++) x = buf.toString('utf8', 0, buf.length);
             console.timeEnd('buf.toString 24');
 
             t.done();

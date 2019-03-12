@@ -41,6 +41,7 @@ function bson_decode( buf ) {
 var _entity = bytes.byteEntity();       // { val, end } tuple
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var type, subtype, name, start;
+    // 2.3x faster to read a Uint8Array, but slow to convert
 
     while (base < bound) {
         start = base;
