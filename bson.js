@@ -1,14 +1,15 @@
 /*
  * shim to unify the apis of the various incarnations of the bson package
  *
- * Copyright (C) 2017 Andras Radics
+ * Copyright (C) 2017-2019 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
-var bson = require('bson-v0.3.2');
-var bson = require('bson-v0.4.23');             // 15% faster than bson3
-var bson = require('bson-v0.5.7');              // 11% faster than bson3
-var bson = require('bson-v1.0.4');              // 11% faster than bson3
+//var bson = require('bson-v0.3.2');
+//var bson = require('bson-v0.4.23');             // 15% faster than bson3
+//var bson = require('bson-v0.5.7');              // 11% faster than bson3
+//var bson = require('bson-v1.0.4');              // 11% faster than bson3
+var bson = require('bson');
 
 var ObjectID, serialize, deserialize;
 
@@ -33,7 +34,12 @@ module.exports = {
     ObjectID: ObjectID,
     serialize: serialize,
     deserialize: deserialize,
+    Long: bson.Long,
+    Timestamp:bson.Timestamp,
+    MinKey: bson.MinKey,
+    MaxKey: bson.MaxKey,
 };
+
 
 //console.log("AR:", module.exports.ObjectID())
 //console.log("AR:", module.exports.serialize({a:1}))
