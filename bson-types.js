@@ -177,13 +177,16 @@ Long.prototype.put = function put( buf, offset ) {
     bytes.putInt32(this.high32, buf, offset+4);
     return offset + 8;
 }
+var tmpbuf8 = [,,,,,,,,];
 Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
-    // FIXME: this breaks for negative values... eg -1
-    return new Long(n / 0x100000000 >>> 0, n & 0xFFFFFFFF);
+    var ret = new Long(0, 0);
+    bytes.putInt64(n, tmpbuf8, 0);
+    ret.get(tmpbuf8, 0);
+    return ret;
 }
 Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
-    if ((this.high32 & 0x1FFFFF) === 0) return this.high32 * 0x100000000 + this.low32;
-    else return { Int64: true, _lo: this.low32, _hi: this.high32 };
+    this.put(tmpbuf8, 0);
+    return bytes.getInt64(tmpbuf8, 0);
 }
 Long.prototype = Long.prototype;
 
