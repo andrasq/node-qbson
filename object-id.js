@@ -134,30 +134,41 @@ var _seq = Math.random() * 0x100000000 >>> 10;
 // overflow occurs when the sequence id laps itself within the same second (same "now" period)
 var _lastSeq = _seq;
 var _lastNow = (Date.now() / 1000) >>> 0;
+var _getNowCount = 0;
 
-function _incrementSequence( now ) {
-    _seq = (_seq + 1) & 0xFFFFFF;
+function _incrementSequence( ) {
+    var now = _getNow();
+    _seq += 1;
+
+    // sequence must never wrap in the same second
+    while (_seq >= 0x1000000 && now === _lastNow) now = _getNow();
+
     if (now !== _lastNow) {
         _lastSeq = _seq;
         _lastNow = now;
+        if (_seq > 0x800000) _seq = 0;
     }
-    else {
-        // prevent accidental duplicate ids
-        if (_seq === _lastSeq) throw new Error("ObjectId sequence overflow");
-    }
+    return now;
 }
 
 // look up the time less frequently, avoid the Date.now() overhead
 var _reuse_now = null;
 var _reuse_timeout = new QTimeout(function(){ _reuse_now = null }).unref();
+function _getNow( ) {
+    if (_getNowCount++ > 200) {
+        _reuse_now = null;
+        _getNowCount = 0;
+    }
+    var now = _reuse_now || Date.now();
+    if (!_reuse_now && now % 1000 < 990) {
+        _reuse_now = now;
+        _reuse_timeout.start(990 - (now % 1000));
+    }
+    return (now / 1000) >>> 0;
+}
 
 function generateId( dst ) {
-    var now = _reuse_now || Date.now();
-    if (!_reuse_now && now % 1000 < 950) {
-        _reuse_now = now;
-        _reuse_timeout.start(now % 1000 - 50);
-    }
-    now = (now / 1000) >>> 0;
+    var now = _incrementSequence();
 
     dst[0] = (now >> 24) & 0xFF;
     dst[1] = (now >> 16) & 0xFF;
@@ -170,8 +181,6 @@ function generateId( dst ) {
 
     dst[7] = (_pid >> 8) & 0xFF;
     dst[8] = _pid & 0xFF;
-
-    _incrementSequence(now);
 
     dst[9] = (_seq >> 16) & 0xFF;
     dst[10] = (_seq >> 8) & 0xFF;
