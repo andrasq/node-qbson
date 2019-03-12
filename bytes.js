@@ -136,12 +136,12 @@ function scanIntZ( buf, base, entity ) {
 }
 
 // get the NUL-terminated utf8 "cstring" string
+// TODO: same as scanStringUtf8, combine
 function scanStringZ( buf, base, entity ) {
-    for (var i=base; buf[i]; i++) ;
-    // breakeven is around 13 chars (node 5; more with node 6)
-    if (i < base + 12 || buf instanceof Array) return scanStringUtf8(buf, base, entity);
-    entity.val = buf.toString('utf8', base, i);
-    return (entity.end = i) + 1;
+    // breakeven vs buf.toString() is around 13 chars (node 5; more with node 6)
+    // note that cannot rely on native js toString if using overlong encoding.
+    // node-v10 and up are much slower than before for both, breakeven around 11.
+    return scanStringUtf8(buf, base, entity);
 }
 
 // get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
@@ -161,22 +161,19 @@ function scanStringZ( buf, base, entity ) {
 // DC0016 to DFFF16 not preceded by a value in the range D80016 to DBFF16.
 
 function scanStringUtf8( buf, base, entity ) {
-    var ch, str = "", code;
-    for (var i=base; buf[i]; i++) {
-        ch = buf[i];
-        if (ch < 0x80) str += String.fromCharCode(ch);  // 0xxx xxxx
-        else if (ch < 0xE0) str += String.fromCharCode(((ch & 0x1F) <<  6) + (buf[++i] & 0x3F));  // 110x xxxx  10xx xxxx
-        else if (ch < 0xF0) str += String.fromCharCode(((ch & 0x0F) << 12) + ((buf[++i] & 0x3F) << 6) + (buf[++i] & 0x3F));  // 1110 xxxx  10xx xxxx  10xx xxxx
-        // TODO: should validity test succeeding chars
-    }
-    entity.val = str;
-    return (entity.end = i) + 1;
+    var bound = findIndexOf(0, buf, base, buf.length);
+    entity.val = utf8.read(buf, base, bound);
+    entity.end = bound;
+    return bound + 1 > buf.length ? buf.length : bound + 1;
 }
-
+function findIndexOf( ch, buf, base, bound ) {
+    for (var i = base; i < bound; i++) if (buf[i] === ch) return i;
+    return bound;
+}
 
 function putStringZ( s, target, offset ) {
     if (typeof s !== 'string') s = '' + s;
-    offset = putString(s, target, offset);
+    offset = utf8.write(target, offset, s, 0, s.length, true);
     target[offset++] = 0;
     return offset;
 }
