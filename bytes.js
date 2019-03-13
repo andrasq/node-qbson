@@ -61,6 +61,8 @@ module.exports = {
     scanIntZ: scanIntZ,
     scanStringZ: scanStringZ,
     scanStringUtf8: scanStringUtf8,
+
+    getString: getString,
 };
 
 
@@ -188,4 +190,8 @@ function putStringZOverlong( s, target, offset ) {
     offset = utf8.write(target, offset, s, 0, s.length, true);
     target[offset++] = 0;
     return offset;
+}
+
+function getString( buf, base, bound ) {
+    return utf8.read(buf, base, bound);
 }
