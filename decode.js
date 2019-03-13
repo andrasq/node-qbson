@@ -152,6 +152,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
 // Handles utf16 only (16-bit code points), same as javascript.
 // Note: faster for short strings, slower for long strings
 // Note: generates more gc activity than buf.toString
+/**
 function getString( buf, base, bound ) {
     var ch, str = "", code;
     for (var i=base; i<bound; i++) {
@@ -162,6 +163,7 @@ function getString( buf, base, bound ) {
     }
     return str;
 }
+**/
 
 
 // extract a regular expression from the bson buffer
@@ -182,8 +184,9 @@ function getString( buf, base, bound ) {
 function scanRegExp( buf, base, bound, item ) {
     var s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
     // extract
-    scanStringUtf8(buf, base, s1);
-    scanStringUtf8(buf, s1.end + 1, s2);
+    scanStringZ(buf, base, s1);
+    scanStringZ(buf, s1.end + 1, s2);
+// FIXME: this is not the correct value!
     item.val = createRegExp(s1.val, s2.val);
     base = s2.end + 1;
 
@@ -229,7 +232,7 @@ function scanString( buf, base, bound, item ) {
     var end = base + len - 1;
     if (buf[end] !== 0) throw new Error("invalid bson, string at " + base + " not zero terminated");
     // our pure js getString() is faster for short strings
-    item.val = (len < 20) ? getString(buf, base, end) : buf.toString('utf8', base, end);
+    item.val = (len < 20) ? bytes.getString(buf, base, end) : buf.toString('utf8', base, end);
     return item.end = end + 1;
 }
 
