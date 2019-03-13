@@ -3,6 +3,7 @@
 var assert = require('assert');
 var BSON = require('../bson');
 var qbson = require('../qbson');
+var bson = require('../bson');
 
 var data = [
     // numbers
@@ -85,6 +86,22 @@ assert.deepStrictEqual(x, { a: undefined });
 
 // unknown type
 assert.throws(function() { qbson.decode(new Buffer([7, 0, 0, 0, 0x55, 0, 0])) }, /unsupported bson .* 0x55/);
+
+// overran end
+assert.throws(function() { qbson.decode(qbson.encode({ a: {} }).slice(0, -1)) }, /overran/);
+
+// ignores invalid regex flags
+var buf = bson.serialize({ a: /foo/i });
+assert.deepEqual(String(qbson.decode(buf).a), '/foo/i');
+buf[11] = '3'.charCodeAt(0);
+assert.deepEqual(String(qbson.decode(buf).a), '/foo/');
+
+// allows regex string containing ascii NUL (yikes)
+var buf = bson.serialize({ a: /foo/i });
+console.log(buf);
+buf[8] = 0;
+// FIXME: returns bad regex
+// assert.deepEqual(String(qbson.decode(buf).a), '/f\x00o/i');
 
 var buf, obj;
 
