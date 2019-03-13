@@ -28,7 +28,7 @@ var putStringZ = bytes.putStringZ;
 var putStringZOverlong = bytes.putStringZOverlong;
 
 module.exports = bson_encode;
-module.exports.guessSize = guessSize;
+//module.exports.guessSize = guessSize;
 module.exports.encodeEntities = encodeEntities;
 module.exports.putInt32 = bytes.putInt32;
 
@@ -46,11 +46,13 @@ function bson_encode( obj ) {
     var offset = encodeEntities(obj, buf, 0);
     return new Buffer(buf);
 
+/**
     // if buffer size was close enough, use it
     if (buf.length <= 2 * offset) return buf.slice(0, offset);
     var ret = new Buffer(offset);
     buf.copy(ret);
     return ret;
+**/
 }
 
 var T_FLOAT = 1;        // 64-bit IEEE 754 float
@@ -82,7 +84,6 @@ var T_BINARY_MD5 = 5;           // subtype 5
 var T_BINARY_USER_DEFINED = 5;  // subtype 128
 
 // see also buffalo and json-simple for typing
-// TODO: distinguish func from scoped func
 // TODO: distinguish symbol from string
 function determineTypeId( value ) {
     switch (typeof value) {
@@ -124,6 +125,7 @@ function determineClassTypeId( value ) {
 
 // estimate how many bytes will be required to store the item
 // must never underestimate the size, but ok to guess too high
+/**
 function guessCompoundSize( item ) {
     var contentsSize = 0, i, key;
     if (Array.isArray(item)) {
@@ -141,9 +143,11 @@ function guessCompoundSize( item ) {
     // length + contents + NUL byte
     return 4 + contentsSize + 1;
 }
+**/
 
 // estimate the _most_ bytes the value will occupy.  Never guess too low.
 // The first switch maps the common sizes, a second switch the more obscure ones.
+/**
 function guessSize( value ) {
     var id = determineTypeId(value);
     // TODO: if (bsonTypes.typeInfo[id].size > 0) return bsonTypes.typeInfo[id].size + bsonTypes.typeInfo[id].fixup;
@@ -162,8 +166,10 @@ function guessSize( value ) {
     default: return guessVariableSize(id, value);
     }
 }
+**/
 // Its 40% faster to use a second switch than to exceed 600 chars (not inline),
 // with only 3% penalty if having to use the second switch as well.
+/**
 function guessVariableSize( id, value ) {
     switch (id) {
     case T_SYMBOL: return 4 + 3 * value.toString().length - 8 + 1;
@@ -179,6 +185,7 @@ function guessVariableSize( id, value ) {
     default: throw new Error("unknown size of " + (typeof value));
     }
 }
+**/
 
 function encodeEntities( obj, target, offset ) {
     var key, start = offset;
