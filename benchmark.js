@@ -5,10 +5,9 @@
 
 var qtimeit = require('qtimeit');
 
+var BSON = require('./bson');
 var qbson = require('./');
-var bson = require('bson');
-
-var BSON = new bson();
+var buffalo = require('buffalo');
 
 var str250 = new Array(51).join('xxxxx');
 var str250utf8 = new Array(51).join('xxxx\x00ff');
@@ -52,6 +51,9 @@ if (0)
         'bson': function() {
             x = BSON.serialize(data);
         },
+        'buffalo.serialize': function() {
+            x = buffalo.serialize(data);
+        },
         'qbson': function() {
             x = qbson.encode(data);
         },
@@ -64,6 +66,9 @@ if (1)
     qtimeit.bench({
         'bson': function() {
             y = BSON.deserialize(bytes);
+        },
+        'buffalo.parse': function() {
+            y = buffalo.parse(bytes);
         },
         'qbson': function() {
             y = qbson.decode(bytes);
