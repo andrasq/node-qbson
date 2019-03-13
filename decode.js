@@ -182,6 +182,30 @@ function getString( buf, base, bound ) {
     // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
     // Having to run the hack loop is hugely slower.
 function scanRegExp( buf, base, bound, item ) {
+console.log("AR:", base, bound);
+// FIXME: need to scan the bytes to find the probable end of the regex
+// ie ['f' '\0' 'o' \0 'i' 'm' \0] is a regex
+// Simplifying assumptions: no double-\0
+/**
+    // find the probably end of the regex
+    for (var i = 1; i < bound; i++) {
+//process.stdout.write('.');
+        if (buf[i - 1] === 0 && buf[i] >= 1 && (buf[i] <= 0x13 || buf[i] === 127 || buf[i] === 255)) break;
+    }
+    var end2 = i === bound ? i : i - 1;
+    // back up to the start of the flags
+    while (buf[--i] !== 0 && i > base) {
+        // valid BSON regex flags are /imlsux, must be in alpha order
+        // if ('imlsux'.indexOf(String.fromCharCode(buf[i])) < 0) throw ??
+    }
+    var end1 = i;
+    var patt = bytes.getString(buf, base, end1);
+    var flags = bytes.getString(buf, end1 + 1, end2);
+    item.val = createRegExp(patt, flags);
+    item.end = end2;
+    return end2 + 1;
+**/
+
     var s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
     // extract
     scanStringZ(buf, base, s1);
@@ -191,7 +215,7 @@ function scanRegExp( buf, base, bound, item ) {
     base = s2.end + 1;
 
     // hack
-    if (buf[base] === 0 || buf[base] > 0x12) {
+    if (buf[base] === 0 || (buf[base] > 0x13 && buf[base] !== 127 && buf[base] !== 255)) {
         while (base < bound) {
             if (buf[base]) base++;              // find 00
             else if (buf[++base] <= 0x12) {     // followed by type code
