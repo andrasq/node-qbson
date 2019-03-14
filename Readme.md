@@ -1,5 +1,7 @@
 qbson
 =====
+[![Build Status](https://api.travis-ci.org/andrasq/node-qbson.svg?branch=master)](https://travis-ci.org/andrasq/node-qbson?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/andrasq/node-qbson/badge.svg?branch=master)](https://coveralls.io/github/andrasq/node-qbson?branch=master)
 
 This repo contains some experimental code for BSON conversions.
 
