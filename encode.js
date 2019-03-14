@@ -27,6 +27,10 @@ var putFloat = bytes.putFloat64;
 var putStringZ = bytes.putStringZ;
 var putStringZOverlong = bytes.putStringZOverlong;
 
+// polyfills for nodejs that need it
+eval('Buffer.allocUnsafe = Buffer.allocUnsafe || function(n) { return new Buffer(n) }');
+eval('Buffer.from = (parseInt(process.versions.node) >= 7) && Buffer.from || function(a, b, c) { return new Buffer(a, b, c) }');
+
 module.exports = bson_encode;
 //module.exports.guessSize = guessSize;
 module.exports.encodeEntities = encodeEntities;
@@ -38,19 +42,19 @@ module.exports.putInt32 = bytes.putInt32;
 function bson_encode( obj ) {
     // 28% faster to guess at buffer size instead of calcing exact size
     // it is 23% slower to compose into an array and then make that into a buffer
-    // var buf = new Buffer(guessSize(obj));
+    // var buf = Buffer.allocUnsafe(guessSize(obj));
 
     // node-v6 and up are much faster writing an array than a Buffer, so convert at the end
     // It is much faster to populate an empty array than to guess at the final size.
     var buf = new Array();
 
     var offset = encodeEntities(obj, buf, 0);
-    return Buffer.from ? Buffer.from(buf) : new Buffer(buf);
+    return Buffer.from(buf);
 
 /**
     // if buffer size was close enough, use it
     if (buf.length <= 2 * offset) return buf.slice(0, offset);
-    var ret = new Buffer(offset);
+    var ret = Buffer.allocUnsafe(offset);
     buf.copy(ret);
     return ret;
 **/
