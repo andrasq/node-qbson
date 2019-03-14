@@ -63,6 +63,9 @@ var x = qbson.decode(buf);
 assert.equal(x.a.$ref, 'refname');
 assert(x.a.$id instanceof qbson.ObjectId);
 assert.equal(x.a.$id.toString(), '00112233445566778899aabb');
+var xx = bson.deserialize(buf);
+assert.equal(xx.a.db, 'refname');
+assert.equal(xx.a.oid.toString(), '00112233445566778899aabb');
 
 var obj = new qbson.ScopedFunction( function(abc){ return 123 + ab }, { ab: 12 });
 var buf = qbson.encode({ a: obj });

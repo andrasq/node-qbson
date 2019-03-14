@@ -285,8 +285,7 @@ function encodeEntity( name, value, target, offset ) {
         break;
     case T_DBREF:
         // deprecated format, even mongod shell encodes it as a type 3 object { $ref, $id }
-        var mark = offset;
-        offset = putStringZ(value.$ref, target, offset);
+        offset = putString(value.$ref, target, offset);
         offset = value.$id.copyToBuffer(target, offset);
         break;
     case T_MINKEY:

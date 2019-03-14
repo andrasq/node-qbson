@@ -133,7 +133,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             value = new MaxKey();
             break;
         case 12:
-            base = scanStringZ(buf, base, _entity);
+            base = scanString(buf, base, bound, _entity);
             value = new DbRef(_entity.val, new ObjectId().setFromBuffer(buf, base));
             base += 12;
             break;
