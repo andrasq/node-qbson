@@ -40,8 +40,8 @@ for (var i=0; i<data.length; i++) {
 
 var buf = BSON.serialize({ a: new BSON.Long(1, -2) });
 var x = qbson.decode(buf);
-assert.equal(x.a.high32, -2 >>> 0);
-assert.equal(x.a.low32, 1);
+assert.equal(x.a.hi, -2 >>> 0);
+assert.equal(x.a.lo, 1);
 assert.equal(x.a.valueOf(), -2 * 0x100000000 + 1);
 
 var buf = BSON.serialize({ a: new BSON.Timestamp(1, -2) });

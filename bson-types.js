@@ -172,16 +172,16 @@ function MaxKey( ) {
  */
 function Long( highWord, lowWord ) {
     this._bsontype = 'Long';
-    this.high32 = +highWord;
-    this.low32 = +lowWord;
+    this.hi = +highWord;
+    this.lo = +lowWord;
 }
 Long.prototype.get = function get( buf, base ) {
-    this.low32 = bytes.getInt32(buf, base);
-    this.high32 = bytes.getInt32(buf, base+4);
+    this.lo = bytes.getInt32(buf, base);
+    this.hi = bytes.getInt32(buf, base+4);
 }
 Long.prototype.put = function put( buf, offset ) {
-    bytes.putInt32(this.low32, buf, offset);
-    bytes.putInt32(this.high32, buf, offset+4);
+    bytes.putInt32(this.lo, buf, offset);
+    bytes.putInt32(this.hi, buf, offset+4);
     return offset + 8;
 }
 var tmpbuf8 = [,,,,,,,,];
