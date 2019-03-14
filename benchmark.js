@@ -21,19 +21,21 @@ var datasets = {
 //    'text 250 20% utf8': new Array(51).join("xxxx\u00ff"),
 //    '{}': {},
 //    'regex': /fo[o]/i,
-    'array[5]': [1,2,3,4,5],
-    'array[sparse 5]': [1,,,,5],
-    'object[5]': {a:1,b:2,c:3,d:4,e:5},
+//    'array[5]': [1,2,3,4,5],
+//    'array[sparse 5]': [1,,,,5],
+//    'object[5]': {a:1,b:2,c:3,d:4,e:5},
     // 'array[100]': array100,
     // 'object[100]': object100,
-    'nested array[5]': [1,[2,[3,[4,[5]]]]],
-    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
+//    'nested array[5]': [1,[2,[3,[4,[5]]]]],
+//    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
     // ObjectId
     'test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
     // 'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
 //    'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
 }
 var x;
+
+function createBuffer(data) { return Buffer.from ? Buffer.from(data) : new Buffer(data) }
 
 qtimeit.bench.timeGoal = .4;
 qtimeit.bench.visualize = true;
@@ -46,9 +48,10 @@ for (k in datasets) {
 
     // var bytes = BSON.serialize(data);
     var bytes = qbson.encode(data);
-    var xj = new Buffer(JSON.stringify(data));
+    var xj = createBuffer(JSON.stringify(data));
+    var y;
 
-if (0)
+if (1)
     qtimeit.bench({
         'bson': function() {
             x = BSON.serialize(data);
@@ -60,7 +63,7 @@ if (0)
             x = qbson.encode(data);
         },
         'json': function() {
-            x = new Buffer(JSON.stringify(data));
+            x = createBuffer(JSON.stringify(data));
         },
     })
 
