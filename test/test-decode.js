@@ -101,10 +101,8 @@ assert.deepEqual(String(qbson.decode(buf).a), '/foo/');
 
 // allows regex string containing ascii NUL (yikes)
 var buf = bson.serialize({ a: /foo/i });
-console.log(buf);
 buf[8] = 0;
-// FIXME: returns bad regex
-// assert.deepEqual(String(qbson.decode(buf).a), '/f\x00o/i');
+assert.deepEqual(String(qbson.decode(buf).a), '/f\x00o/i');
 
 var buf, obj;
 

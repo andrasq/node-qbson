@@ -182,49 +182,27 @@ function getString( buf, base, bound ) {
     // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
     // Having to run the hack loop is hugely slower.
 function scanRegExp( buf, base, bound, item ) {
-console.log("AR:", base, bound);
-// FIXME: need to scan the bytes to find the probable end of the regex
-// ie ['f' '\0' 'o' \0 'i' 'm' \0] is a regex
-// Simplifying assumptions: no double-\0
-/**
-    // find the probably end of the regex
-    for (var i = 1; i < bound; i++) {
-//process.stdout.write('.');
-        if (buf[i - 1] === 0 && buf[i] >= 1 && (buf[i] <= 0x13 || buf[i] === 127 || buf[i] === 255)) break;
-    }
-    var end2 = i === bound ? i : i - 1;
-    // back up to the start of the flags
-    while (buf[--i] !== 0 && i > base) {
-        // valid BSON regex flags are /imlsux, must be in alpha order
-        // if ('imlsux'.indexOf(String.fromCharCode(buf[i])) < 0) throw ??
-    }
-    var end1 = i;
-    var patt = bytes.getString(buf, base, end1);
-    var flags = bytes.getString(buf, end1 + 1, end2);
-    item.val = createRegExp(patt, flags);
-    item.end = end2;
-    return end2 + 1;
-**/
-
-    var s1 = { val: 0, end: 0 }, s2 = { val: 0, end: 0 };
-    // extract
+    var s1 = { val: 0, end: 0 };
+    var s2 = { val: 0, end: 0 };
     scanStringZ(buf, base, s1);
-    scanStringZ(buf, s1.end + 1, s2);
-// FIXME: this is not the correct value!
-    item.val = createRegExp(s1.val, s2.val);
-    base = s2.end + 1;
+    var end = scanStringZ(buf, s1.end + 1, s2);
 
-    // hack
-    if (buf[base] === 0 || (buf[base] > 0x13 && buf[base] !== 127 && buf[base] !== 255)) {
-        while (base < bound) {
-            if (buf[base]) base++;              // find 00
-            else if (buf[++base] <= 0x12) {     // followed by type code
-                var ch = buf[base-2];           // after a 00 or [imx]
-                if (ch === 0x00 || ch === 0x69 || ch === 0x6d || ch == 0x78) break;
-            }
-        }
+    // if the regex ends on an entity bound, all is good
+    // if not, must be confused by embedded zero so try to find the actual end
+    while (!(end >= bound ||            // bson end
+             buf[end] === 0 ||          // double NUL bytes, eg when regex entity is last in enclosing object.  Two adjacent regex NUL probably error out.
+             isEntityStart(buf[end])))  // an entity start (type) byte following a zero byte is the expected next-entity start
+    {
+        s1.val += '\x00' + s2.val;
+        s1.end = s2.end;
+        end = scanStringZ(buf, end, s2);
     }
-    return item.end = base;
+
+    item.val = createRegExp(s1.val, s2.val);
+    return end;
+
+    // test whether ch starts a bson entity
+    function isEntityStart(ch) { return (ch >= 1 && ch <= 19 || ch === 127 || ch === 255) }
 }
 
 function createRegExp( pattern, flags ) {
