@@ -63,7 +63,7 @@ function typeIds() { return {
     T_DBREF: 12,                // deprecated, now { $ref, $id, $db } object: stringZ ns, 12B ObjectID
     T_FUNCTION: 13,             // function source
     T_SYMBOL: 14,               // deprecated, just like string
-    T_SCOPED_FUNCTION: 15,      // 4B tot length, "function(){}" string(2), scope key-value mappings object(3)
+    T_SCOPED_CODE: 15,          // 4B tot length, "function(){}" string(2), scope key-value mappings object(3)
     T_INT: 16,                  // 32-bit LE signed twos complement
     T_TIMESTAMP: 17,            // special bson type: 32-bit time(), 32-bit increment as 64-bit LE
     T_LONG: 18,                 // 64-bit LE signed twos complement
@@ -80,35 +80,35 @@ function typeIds() { return {
     T_BINARY_USER_DEFINED: 128, // subtypes 128-255 are user defined
 }}
 
-function typeInfo() { return [
+function typeInfo() { var ids = typeIds(); return [
     { id: 0 },
-    { id: typeIds.T_FLOAT,              key: 'T_FLOAT',         name: 'Float',          size:  8,  fixup: 0 },
-    { id: typeIds.T_STRING,             key: 'T_STRING',        name: 'String',         size: -1,  fixup: 4 },
-    { id: typeIds.T_OBJECT,             key: 'T_OBJECT',        name: 'Object',         size: -1,  fixup: 0 },
-    { id: typeIds.T_ARRAY,              key: 'T_ARRAY',         name: 'Array',          size: -1,  fixup: 0 },
-    { id: typeIds.T_BINARY,             key: 'T_BINARY',        name: 'Binary_0',       size: -1,  fixup: 5 },
-    { id: typeIds.T_UNDEFINED,          key: 'T_UNDEFINED',     name: 'Undefined',      size:  0,  fixup: 0 },
-    { id: typeIds.T_OBJECTID,           key: 'T_OBJECTID',      name: 'ObjectId',       size: 12,  fixup: 0 },
-    { id: typeIds.T_BOOLEAN,            key: 'T_BOOLEAN',       name: 'Boolean',        size:  1,  fixup: 0 },
-    { id: typeIds.T_DATE,               key: 'T_DATE',          name: 'Date',           size:  8,  fixup: 0 },
-    { id: typeIds.T_NULL,               key: 'T_NULL',          name: 'Null',           size:  0,  fixup: 0 },
-    { id: typeIds.T_REGEXP,             key: 'T_REGEXP',        name: 'RegExp',         size: -1,  fixup: 0 },
-    { id: typeIds.T_DBREF,              key: 'T_DBREF',         name: 'DbRef',          size: -1,  fixup: 0 },
-    { id: typeIds.T_FUNCTION,           key: 'T_FUNCTION',      name: 'Function',       size: -1,  fixup: 4 },
-    { id: typeIds.T_SYMBOL,             key: 'T_SYMBOL',        name: 'Symbol',         size: -1,  fixup: 4 },
-    { id: typeIds.T_SCOPED_FUNCTION,  key: 'T_SCOPED_FUNCTION', name: 'ScopedFunction', size: -1,  fixup: 4 },
-    { id: typeIds.T_INT,                key: 'T_INT',           name: 'Int',            size:  4,  fixup: 0 },
-    { id: typeIds.T_TIMESTAMP,          key: 'T_TIMESTAMP',     name: 'Timestamp',      size:  8,  fixup: 0 },
-    { id: typeIds.T_LONG,               key: 'T_LONG',          name: 'Long',           size:  8,  fixup: 0 },
-    { id: typeIds.T_MINKEY,             key: 'T_MINKEY',        name: 'MinKey',         size:  0,  fixup: 0 },
-    { id: typeIds.T_MAXKEY,             key: 'T_MAXKEY',        name: 'MaxKey',         size:  0,  fixup: 0 },
+    { id: ids.T_FLOAT,          key: 'T_FLOAT',         name: 'Float',          size:  8,  fixup: 0 },
+    { id: ids.T_STRING,         key: 'T_STRING',        name: 'String',         size: -1,  fixup: 4 },
+    { id: ids.T_OBJECT,         key: 'T_OBJECT',        name: 'Object',         size: -1,  fixup: 0 },
+    { id: ids.T_ARRAY,          key: 'T_ARRAY',         name: 'Array',          size: -1,  fixup: 0 },
+    { id: ids.T_BINARY,         key: 'T_BINARY',        name: 'Binary_0',       size: -1,  fixup: 5 },
+    { id: ids.T_UNDEFINED,      key: 'T_UNDEFINED',     name: 'Undefined',      size:  0,  fixup: 0 },
+    { id: ids.T_OBJECTID,       key: 'T_OBJECTID',      name: 'ObjectId',       size: 12,  fixup: 0 },
+    { id: ids.T_BOOLEAN,        key: 'T_BOOLEAN',       name: 'Boolean',        size:  1,  fixup: 0 },
+    { id: ids.T_DATE,           key: 'T_DATE',          name: 'Date',           size:  8,  fixup: 0 },
+    { id: ids.T_NULL,           key: 'T_NULL',          name: 'Null',           size:  0,  fixup: 0 },
+    { id: ids.T_REGEXP,         key: 'T_REGEXP',        name: 'RegExp',         size: -1,  fixup: 0 },
+    { id: ids.T_DBREF,          key: 'T_DBREF',         name: 'DbRef',          size: -1,  fixup: 0 },
+    { id: ids.T_FUNCTION,       key: 'T_FUNCTION',      name: 'Function',       size: -1,  fixup: 4 },
+    { id: ids.T_SYMBOL,         key: 'T_SYMBOL',        name: 'Symbol',         size: -1,  fixup: 4 },
+    { id: ids.T_SCOPED_CODE,    key: 'T_SCOPED_CODE',   name: 'ScopedFunction', size: -1,  fixup: 4 },
+    { id: ids.T_INT,            key: 'T_INT',           name: 'Int',            size:  4,  fixup: 0 },
+    { id: ids.T_TIMESTAMP,      key: 'T_TIMESTAMP',     name: 'Timestamp',      size:  8,  fixup: 0 },
+    { id: ids.T_LONG,           key: 'T_LONG',          name: 'Long',           size:  8,  fixup: 0 },
+    { id: ids.T_MINKEY,         key: 'T_MINKEY',        name: 'MinKey',         size:  0,  fixup: 0 },
+    { id: ids.T_MAXKEY,         key: 'T_MAXKEY',        name: 'MaxKey',         size:  0,  fixup: 0 },
 ]}
 
 function typeSizes() {
     var info = typeInfo();
     var sizes = new Array();
     for (var i=0; i<info.length; i++) {
-        if (info[i].id) sizes[info[i].id] = sizes[info[i]].size < 0 ? undefined : sizes[info[i]].size;
+        if (info[i].id) sizes[info[i].id] = info[i].size < 0 ? undefined : info[i].size;
     }
     return sizes;
 }
@@ -195,7 +195,7 @@ Long.prototype = Long.prototype;
 /*
  * DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
  * We can create objects of this type, thats it.
- * FIXME: how is this actually stored by mongo?  bson stores { $ref: namespace, $id: oid, $db: db }
+ * It is stored as a type2 string (len + refname + \0) then 12 bytes of objectid
  */
 function DbRef( ref, id ) {
     this._bsontype = 'DbRef';
@@ -203,22 +203,6 @@ function DbRef( ref, id ) {
     this.$id = id;      // (oid instanceof ObjectId) ? oid : new ObjectId(oid); -- not: anything can be an object-id
     // The mongo shell DBRef() takes expects exactly two arguments, ref and id; no db.
     // this.$db = db;
-}
-var entity = bytes.byteEntity();
-// NOTUSED: obsolete format
-DbRef.prototype.get = function get( buf, base ) {
-    base = bytes.scanStringZ(buf, base, entity)
-    this.$ref = entity.val;
-    this.$id = new ObjectId(buf, base);
-    return base + 12;
-}
-// NOTUSED: obsolete format
-DbRef.prototype.put = function put( buf, offset ) {
-    // mongod encodes it as a type 3 object { $ref: <name>, $id: <oid> }
-    // The below implementation is obsolete.
-    offset = bytes.putStringZOverlong(this.$ref, buf, offset);
-    offset = this.$id.copyToBuffer(buf, offset);
-    return offset;
 }
 
 

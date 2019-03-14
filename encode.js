@@ -70,8 +70,8 @@ var T_NULL = 10;        // 0B
 var T_REGEXP = 11;      // pattern + NUL + flags + NUL.  NOTE: must scan past embedded NUL bytes!
 var T_DBREF = 12;       // deprecated
 var T_FUNCTION = 13;    // function source
-var T_SYMBOL = 14;              // TODO: same as string
-var T_SCOPED_FUNCTION = 15;     // function that decodes into `with (scope) { func() }`
+var T_SYMBOL = 14;      // stored same as string
+var T_SCOPED_CODE = 15; // function that decodes into `with (scope) { func() }`
 var T_INT = 16;         // 32-bit LE signed twos complement
 var T_TIMESTAMP = 17;   // 64-bit mongodb internal timestamp (32-bit seconds, 32-bit sequence)
 var T_LONG = 18;        // 64-bit LE signed twos complement
@@ -115,7 +115,7 @@ function determineClassTypeId( value ) {
     case Number: return ((value >> 0) === +value) ? T_INT : T_FLOAT;
     case String: return T_STRING;
     case Boolean: return T_BOOLEAN;
-    case ScopedFunction: return T_SCOPED_FUNCTION;
+    case ScopedFunction: return T_SCOPED_CODE;
     case Timestamp: return T_TIMESTAMP;
     case Long: return T_LONG;
     case DbRef: return T_DBREF;
@@ -182,7 +182,7 @@ function guessVariableSize( id, value ) {
     case T_DBREF: return guessSize({ $ref: value.$ref, $id: value.$id, $db: value.$db });
     case T_MINKEY: return 0;
     case T_MAXKEY: return 0;
-    case T_SCOPED_FUNCTION: return 4 + guessSize(String(value.func)) + guessSize(value.scope);
+    case T_SCOPED_CODE: return 4 + guessSize(String(value.func)) + guessSize(value.scope);
 
     default: throw new Error("unknown size of " + (typeof value));
     }
@@ -301,7 +301,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = putInt32(value.getLowBits(), target, offset);
         offset = putInt32(value.getHighBits(), target, offset);
         break;
-    case T_SCOPED_FUNCTION:
+    case T_SCOPED_CODE:
         var mark = offset;
         offset = putString(value.func, target, offset + 4);
         offset = encodeEntities(value.scope, target, offset);
