@@ -36,12 +36,13 @@ module.exports = {
     // classes of special bson types
     ObjectId: ObjectId,
     ObjectID: ObjectId,
-    Timestamp: Timestamp,
-    Long: Long,
-    MinKey: MinKey,
-    MaxKey: MaxKey,
     DbRef: DbRef,
     ScopedFunction: ScopedFunction,
+    Timestamp: Timestamp,
+    Long: Long,
+    Float128: Float128,
+    MinKey: MinKey,
+    MaxKey: MaxKey,
 
     // function with or without scope builder
     makeFunction: makeFunction,
@@ -67,7 +68,7 @@ function typeIds() { return {
     T_INT: 16,                  // 32-bit LE signed twos complement
     T_TIMESTAMP: 17,            // special bson type: 32-bit time(), 32-bit increment as 64-bit LE
     T_LONG: 18,                 // 64-bit LE signed twos complement
-    //T_FLOAT128: 19            // 128-bit LE IEEE 754 float
+    T_FLOAT128: 19,             // 128-bit LE IEEE 754 float (new in mongodb 3.4)
     T_MINKEY: 255,              // special value which sorts before all other possible bson entities
     T_MAXKEY: 127,              // special value which sorts after all other possible bson entites
 
@@ -100,6 +101,7 @@ function typeInfo() { var ids = typeIds(); return [
     { id: ids.T_INT,            key: 'T_INT',           name: 'Int',            size:  4,  fixup: 0 },
     { id: ids.T_TIMESTAMP,      key: 'T_TIMESTAMP',     name: 'Timestamp',      size:  8,  fixup: 0 },
     { id: ids.T_LONG,           key: 'T_LONG',          name: 'Long',           size:  8,  fixup: 0 },
+    { id: ids.T_FLOAT128,       key: 'T_FLOAT128',      name: 'Float128',       size:  8,  fixup: 0 },
     { id: ids.T_MINKEY,         key: 'T_MINKEY',        name: 'MinKey',         size:  0,  fixup: 0 },
     { id: ids.T_MAXKEY,         key: 'T_MAXKEY',        name: 'MaxKey',         size:  0,  fixup: 0 },
 ]}
@@ -213,6 +215,22 @@ ScopedFunction.prototype.valueOf = function valueOf( ) {
     var fn = makeFunction(this.func, this.scope);
     fn._scope = this.scope;
     return fn;
+}
+
+/** bson extracts binary as an object Binary,
+// we extract Binary as a Buffer with property .subtype
+function Binary( buf, base, bound ) {
+    this.parent = buf;
+    this.base = base;
+    this.bound = bound;
+}
+**/
+
+function Float128( w1, w2, w3, w4 ) {
+    this.word1 = w1;
+    this.word2 = w2;
+    this.word3 = w3;
+    this.word4 = w4;
 }
 
 /**
