@@ -74,6 +74,7 @@ var T_SCOPED_CODE = 15; // function that decodes into `with (scope) { func() }`
 var T_INT = 16;         // 32-bit LE signed twos complement
 var T_TIMESTAMP = 17;   // 64-bit mongodb internal timestamp (32-bit seconds, 32-bit sequence)
 var T_LONG = 18;        // 64-bit LE signed twos complement
+var T_FLOAT128 = 19;    // 128-bit LE IEEE 754 float (added in mongod 3.4)
 var T_MINKEY = 255;     // ignore
 var T_MAXKEY = 127;     // ignore
 
