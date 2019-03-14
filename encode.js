@@ -299,8 +299,8 @@ function encodeEntity( name, value, target, offset ) {
     case T_MAXKEY:
         break;
     case T_TIMESTAMP:
-        offset = putInt32(value.getLowBits(), target, offset);
-        offset = putInt32(value.getHighBits(), target, offset);
+        offset = putInt32(value.lo, target, offset);    // sequence ordinal
+        offset = putInt32(value.hi, target, offset);    // seconds since epoch
         break;
     case T_SCOPED_CODE:
         var mark = offset;

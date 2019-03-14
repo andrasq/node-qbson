@@ -71,8 +71,8 @@ for (var i=0; i<data.length; i++) {
         break;
     case qbson.Timestamp:
         // high 4 bytes are timestamp, low 4 bytes are sequence number
-        assert.equal(decoded.a.high_, data[i][0].time);
-        assert.equal(decoded.a.low_, data[i][0].seq);
+        assert.equal(decoded.a.high_, data[i][0].hi);
+        assert.equal(decoded.a.low_, data[i][0].lo);
         break;
     case qbson.Long:
         // NOTE: BSON.deserialize returns Long as a number if it fits!

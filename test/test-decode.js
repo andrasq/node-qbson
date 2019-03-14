@@ -46,8 +46,8 @@ assert.equal(x.a.valueOf(), -2 * 0x100000000 + 1);
 
 var buf = BSON.serialize({ a: new BSON.Timestamp(1, -2) });
 var x = qbson.decode(buf);
-assert.equal(x.a.time, 1);
-assert.equal(x.a.seq, -2 >>> 0);
+assert.equal(x.a.hi, 1);
+assert.equal(x.a.lo, -2 >>> 0);
 
 var buf = BSON.serialize({ a: new BSON.MinKey() });
 var x = qbson.decode(buf);

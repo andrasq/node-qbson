@@ -115,6 +115,18 @@ function typeSizes() {
     return sizes;
 }
 
+/**
+// idea: have Timestamp, Date, Long all inherit their implementation
+// TODO: using Type64 prototype breaks test-encode
+function Type64( hi, lo ) {
+    this.hi = hi;
+    this.lo = lo;
+}
+Type64.prototype.getHi = function getHi() { return this.hi }
+Type64.prototype.getLo = function getLo() { return this.lo }
+Type64.prototype.getHighBits = function() { return this.hi }
+Type64.prototype.getLowBits = function() { return this.lo }
+**/
 
 /*
  * From https://docs.mongodb.com/v3.0/reference/bson-types/#timestamps
@@ -133,15 +145,10 @@ function typeSizes() {
  */
 function Timestamp( t, i ) {
     this._bsontype = 'Timestamp';
-    this.time = t;
-    this.seq = i;
+    this.hi = t;
+    this.lo = i;
 }
-Timestamp.prototype.getHighBits = function getHighBits( ) {
-    return this.time;
-}
-Timestamp.prototype.getLowBits = function getLowBits( ) {
-    return this.seq;
-}
+//Timestamp.prototype = Type64.prototype;
 
 /*
  * Special type which compares lower than all other possible BSON element values.
@@ -233,14 +240,5 @@ function Float128( w1, w2, w3, w4 ) {
     this.word4 = w4;
 }
 
-/**
-// idea: have Timestamp, Date, Long all inherit their implementation
-function Type64( hi, lo ) {
-    this.hi = hi;
-    this.lo = lo;
-}
-Type64.prototype.getHi = function getHi() { return this.hi }
-Type64.prototype.getLo = function getLo() { return this.lo }
-**/
 
 function toStruct(hash) { return toStruct.prototype = hash }
