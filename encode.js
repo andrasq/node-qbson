@@ -213,8 +213,9 @@ function encodeEntity( name, value, target, offset ) {
 
     typeId = determineTypeId(value);
 
-    // some types are automatically converted
-    if (typeId === T_UNDEFINED) typeId = T_NULL;
+    // some types are automatically converted by BSON
+    // TODO: add options to configure this behavior later.
+    // if (typeId === T_UNDEFINED) typeId = T_NULL;
     // if (typeId === T_DBREF) {
     //     typeId = T_OBJECT;
     //     value = { $ref: value.$ref, $id: value.$id };
@@ -234,6 +235,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = putFloat(value, target, offset);
         break;
     case T_SYMBOL:
+        // deprecated
         value = value.toString().slice(7, -1);  // "Symbol(name)" => "name"
         // and fall through to handle as string
     case T_FUNCTION:
@@ -251,10 +253,9 @@ function encodeEntity( name, value, target, offset ) {
         // new Boolean() is an object, truthy even when false; coerce to value
         target[offset++] = +value ? 1 : 0;
         break;
-/**
     case T_UNDEFINED:
+        // deprecated
         break;
-**/
     case T_NULL:
         break;
     case T_OBJECT:
@@ -270,6 +271,7 @@ function encodeEntity( name, value, target, offset ) {
         // The valid BSON flags are ilmsux (i-gnoreCase, l-ocale, m-ultiline, s-dotAll-mode, u-nicode, x-verbose).
         // node-v8.11.1 has /imsuyg (y-sticky, g-lobal), no /lx.  Node-v7 did not have /s.
         // TODO: if node < v8, convert js /g into mongo /s like BSON does.  Maybe.
+        // TODO: maybe should serialiaze all native flags, for js-to-js native data passing
         var flags = (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '') + (value.dotAll ? 's' : '') + (value.unicode ? 'u' : '');
         // if dotAll is not supported, proxy it with /g like BSON-1.0.4 does.
         // node-v8 supports additional flags 'u' 'y' of which only 'y' is supported by mongo 3.4 shell, neither by 2.6
@@ -281,15 +283,15 @@ function encodeEntity( name, value, target, offset ) {
     case T_BINARY:
         offset = putInt32(value.length, target, offset);
         target[offset++] = value.subtype || 0;
+        // copy the bytes without needing them to be in a Buffer
         for (var i = 0; i < value.length; i++) target[offset + i] = value[i];
-        // value.copy(target, offset); // -- do not rely on Buffer methods
         offset += value.length;
         break;
     case T_LONG:
         offset = value.put(target, offset);
         break;
     case T_DBREF:
-        // deprecated format, even mongod shell encodes it as a type 3 object { $ref, $id }
+        // deprecated, even mongod shell encodes it as a type 3 object { $ref, $id }
         offset = putString(value.$ref, target, offset);
         offset = value.$id.copyToBuffer(target, offset);
         break;

@@ -12,8 +12,8 @@ var data = [
     [ new Buffer("AAAA"), "1100000005610004000000004141414100" ],
     [ Symbol("Symbol Name"), "180000000e61000c00000053796d626f6c204e616d650000" ],
     // NOTE: bson encodes `undefined` as value `null`
-    // [ undefined, "0800000006610000" ],       // T_UNDEFINED
-    [ undefined, "080000000a610000" ],          // T_NULL
+    [ undefined, "0800000006610000" ],       // T_UNDEFINED
+    // [ undefined, "080000000a610000" ],          // T_NULL
     [ qbson.ObjectId('0102030405060708090a0b0c'), "14 00 00 00 07 61 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 00" ],
     [ new qbson.Timestamp(1, 2), "10 00 00 00 11 61 00 02 00 00 00 01 00 00 00 00" ],
     [ new qbson.Long(0x10000000, 2), "10000000126100020000000000001000" ],
@@ -29,8 +29,9 @@ var data = [
     // TODO: [ new bsonTypes.Binary("foo"), "..." ],
     [ {x:1, y:null}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <0a 7900> 00 } 00 }" ],
     // FIXME: how should this encode? include y, or omit? Include as null, or undefined?  (bson omits by default)
-    // We encode undefined as T_NULL likemongodb.
-    [ {x:1, y:undefined}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <0a 7900> 00 } 00 }" ],
+    // We encode as T_UNDEFINED, all native types.
+    // TODO: add options to configure behavior later.
+    [ {x:1, y:undefined}, "{ 17000000 03 6100 { 0f000000 <10 7800 01000000> <06 7900> 00 } 00 }" ],
 
     // encodes as DbRef: asciiz refname, ObjectId
     // NOTE: decoding this format breaks bson
@@ -82,6 +83,10 @@ for (var i=0; i<data.length; i++) {
         // bson.deserialize encodes `new Number(1)` as the empty object {}
     }
 }
+
+var obj = { a: undefined };
+var buf = qbson.encode(obj);
+assert.deepEqual(qbson.decode(buf), obj);
 
 // tests that compare against BSON.serialize
 // Note that BSON does not handle all items; those are tested above.
