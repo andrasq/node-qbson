@@ -75,7 +75,8 @@ var entity = bytes.byteEntity();
 buf.write("0234\x00", 1);
 assert.equal(bytes.scanIntZ(buf, 0 + 1, entity), 5 + 1);
 assert.equal(entity.val, 234);
-assert.equal(entity.end, 4 + 1);
+// TODO: deprecate setting entity.end, is always obvious
+// assert.equal(entity.end, 4 + 1);
 
 var entity = bytes.byteEntity();
 fill(buf, 0x41);

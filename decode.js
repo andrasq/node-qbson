@@ -47,9 +47,8 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
     while (base < bound) {
         start = base;
         type = buf[base++];
-        (asArray) ? scanIntZ(buf, base, _entity) : scanStringZ(buf, base, _entity);
+        base = (asArray) ? scanIntZ(buf, base, _entity) : scanStringZ(buf, base, _entity);
         name = _entity.val;
-        base = _entity.end + 1;  // skip string + NUL
 
         var value;
         switch (type) {
@@ -251,3 +250,25 @@ function scanBinary( buf, base, bound, item ) {
     // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
     // We return a Buffer annotated with .subtype like `buffalo` does.
 }
+
+/**
+// find the first 0 byte
+function scanZ( buf, base ) {
+    while (buf[base]) base++;
+    return base;
+}
+
+// gather up the chars between base and bound
+function getChars( buf, base, bound ) {
+    switch (bound - base) {
+    case 1: return String.fromCharCode(buf[base]);
+    case 2: return String.fromCharCode(buf[base], buf[base+1]);
+    case 3: return String.fromCharCode(buf[base], buf[base+1], buf[base+2]);
+    case 4: return String.fromCharCode(buf[base], buf[base+1], buf[base+2], buf[base+3]);
+    default:
+        var ret = '';
+        for (var i=base; i<bound; i++) ret += String.fromCharCode(buf[i]);
+        return ret;
+    }
+}
+**/

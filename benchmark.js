@@ -22,6 +22,7 @@ var datasets = {
 //    '{}': {},
 //    'regex': /fo[o]/i,
     'array[5]': [1,2,3,4,5],
+    'array[sparse 5]': [1,,,,5],
     'object[5]': {a:1,b:2,c:3,d:4,e:5},
     // 'array[100]': array100,
     // 'object[100]': object100,
@@ -43,7 +44,8 @@ for (k in datasets) {
     var data = { a: datasets[k] };
     console.log("\n%s ----", k, data);
 
-    var bytes = BSON.serialize(data);
+    // var bytes = BSON.serialize(data);
+    var bytes = qbson.encode(data);
     var xj = new Buffer(JSON.stringify(data));
 
 if (0)

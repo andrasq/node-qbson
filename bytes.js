@@ -134,7 +134,9 @@ function scanIntZ( buf, base, entity ) {
         n = n * 10 + buf[i] - 0x30;
     }
     entity.val = n;
-    return (entity.end = i) + 1;
+    // return (entity.end = i) + 1;
+    // TODO: deprecate setting entity.end, is obvious in context
+    return i + 1;
 }
 
 // get the NUL-terminated utf8 "cstring" string

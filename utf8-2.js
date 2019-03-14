@@ -60,6 +60,7 @@ function write4(ch, buf, ix) {
 
 // presumed-valid read, does not validate input.  Use to scan known good utf8.
 // Does not error out on overlong-encoded surrogate pairs or codepoints.
+// TODO: readZ would be faster than having to find the bound first
 function utf8_read( buf, base, bound ) {
     base = base || 0;
     bound = bound != null ? bound : buf.length;

@@ -129,3 +129,15 @@ buf = new Buffer([ 0x18, 0, 0, 0, 0x0e, 0x61, 0, 0x0c, 0, 0, 0, 0x53, 0x79, 0x6d
 obj = qbson.decode(buf);
 assert.equal(typeof obj.a, 'symbol');
 assert.equal(obj.a.toString(), 'Symbol(Symbol Name)');
+
+// field names
+var arr = [];
+arr[1] = 1;
+arr[22] = 22;
+arr[333] = 333;
+arr[4444] = 4444;
+arr[55555] = 55555;
+arr[666666] = 666666;
+obj = { a: arr };
+buf = qbson.encode(obj);
+assert.deepEqual(qbson.decode(buf), obj);
