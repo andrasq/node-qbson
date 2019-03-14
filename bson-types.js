@@ -149,7 +149,6 @@ function MinKey( ) {
     this._bsontype = 'MinKey';
 }
 
-
 /*
  * Special type which compares higher than all other possible BSON element values.
  * This is a constant, identified by its type.
@@ -157,7 +156,6 @@ function MinKey( ) {
 function MaxKey( ) {
     this._bsontype = 'MaxKey';
 }
-
 
 /*
  * 64-bit integer.  We can read it and write it, but no arithmetic.
@@ -189,22 +187,19 @@ Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
     this.put(tmpbuf8, 0);
     return bytes.getInt64(tmpbuf8, 0);
 }
-Long.prototype = Long.prototype;
-
+Long.prototype = toStruct(Long.prototype);
 
 /*
  * DbRef is a weird internal mongodb creature, deprecated.  It is a db name and an ObjectId
  * We can create objects of this type, thats it.
  * It is stored as a type2 string (len + refname + \0) then 12 bytes of objectid
+ * The mongo shell DBRef() takes expects exactly two arguments, ref and id; no db.
  */
 function DbRef( ref, id ) {
     this._bsontype = 'DbRef';
     this.$ref = ref;
-    this.$id = id;      // (oid instanceof ObjectId) ? oid : new ObjectId(oid); -- not: anything can be an object-id
-    // The mongo shell DBRef() takes expects exactly two arguments, ref and id; no db.
-    // this.$db = db;
+    this.$id = id;
 }
-
 
 /*
  * class to represent scoped functions to make them encodable
@@ -219,3 +214,15 @@ ScopedFunction.prototype.valueOf = function valueOf( ) {
     fn._scope = this.scope;
     return fn;
 }
+
+/**
+// idea: have Timestamp, Date, Long all inherit their implementation
+function Type64( hi, lo ) {
+    this.hi = hi;
+    this.lo = lo;
+}
+Type64.prototype.getHi = function getHi() { return this.hi }
+Type64.prototype.getLo = function getLo() { return this.lo }
+**/
+
+function toStruct(hash) { return toStruct.prototype = hash }
