@@ -45,7 +45,7 @@ function bson_encode( obj ) {
     var buf = new Array();
 
     var offset = encodeEntities(obj, buf, 0);
-    return new Buffer(buf);
+    return Buffer.from ? Buffer.from(buf) : new Buffer(buf);
 
 /**
     // if buffer size was close enough, use it
