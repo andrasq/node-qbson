@@ -60,7 +60,6 @@ module.exports = {
     // ---- scan
     scanIntZ: scanIntZ,
     scanStringZ: scanStringZ,
-    scanStringUtf8: scanStringUtf8,
 
     getString: getString,
 };
@@ -140,12 +139,15 @@ function scanIntZ( buf, base, entity ) {
 }
 
 // get the NUL-terminated utf8 "cstring" string
-// TODO: same as scanStringUtf8, combine
+// TODO: this needs utf8.readZ, optimized to not have to scan for the NUL byte
 function scanStringZ( buf, base, entity ) {
     // breakeven vs buf.toString() is around 13 chars (node 5; more with node 6)
     // note that cannot rely on native js toString if using overlong encoding.
     // node-v10 and up are much slower than before for both, breakeven around 11.
-    return scanStringUtf8(buf, base, entity);
+    var bound = findIndexOf(0, buf, base, buf.length);
+    entity.val = getString(buf, base, bound);
+    // entity.end = bound;
+    return buf[bound] === 0 ? bound + 1 : bound;
 }
 
 // get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
@@ -164,12 +166,6 @@ function scanStringZ( buf, base, entity ) {
 // DBFF16 not followed by a value in the range DC0016 to DFFF16, or any value in the range
 // DC0016 to DFFF16 not preceded by a value in the range D80016 to DBFF16.
 
-function scanStringUtf8( buf, base, entity ) {
-    var bound = findIndexOf(0, buf, base, buf.length);
-    entity.val = utf8.read(buf, base, bound);
-    entity.end = bound;
-    return bound + 1 > buf.length ? buf.length : bound + 1;
-}
 function findIndexOf( ch, buf, base, bound ) {
     for (var i = base; i < bound; i++) if (buf[i] === ch) return i;
     return bound;

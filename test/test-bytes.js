@@ -84,7 +84,7 @@ buf[0] = 0x42;
 buf[14] = 0;
 assert.equal(bytes.scanStringZ(buf, 0, entity), 15);
 assert.equal(entity.val, 'BAAAAAAAAAAAAA');
-assert.equal(entity.end, 14);
+//assert.equal(entity.end, 14);
 
 var entity = bytes.byteEntity();
 fill(arr, 0x41);
@@ -92,7 +92,7 @@ arr[0] = 0x42;
 arr[14] = 0;
 assert.equal(bytes.scanStringZ(arr, 0, entity), 15);
 assert.equal(entity.val, 'BAAAAAAAAAAAAA');
-assert.equal(entity.end, 14);
+//assert.equal(entity.end, 14);
 
 var entity = bytes.byteEntity();
 fill(arr, 0xff);
@@ -102,7 +102,7 @@ assert.deepEqual(arr.slice(0, 3), [255, 255, 255]);
 assert.deepEqual(arr.slice(10), [255, 255, 255, 255, 255, 255]);
 assert.equal(bytes.scanStringZ(arr, 3, entity), 10);
 assert.equal(entity.val, "foobar");
-assert.equal(entity.end, 9);
+//assert.equal(entity.end, 9);
 fill(arr, 0xff);
 assert.equal(bytes.putStringZ("\u1234567", arr, 3), 3 + 6 + 1);
 assert.deepEqual(arr.slice(3, 3 + 5), [0xe1, 0x88, 0xb4, 0x35, 0x36]);
@@ -110,11 +110,11 @@ assert.deepEqual(arr.slice(0, 3), [255, 255, 255]);
 assert.deepEqual(arr.slice(10), [255, 255, 255, 255, 255, 255]);
 assert.equal(bytes.scanStringZ(arr, 3, entity), 10);
 assert.equal(entity.val, "\u1234" + "567");
-assert.equal(entity.end, 9);
+//assert.equal(entity.end, 9);
 
 assert.equal(bytes.scanStringZ([65, 66, 67], 0, entity), 3);
 assert.equal(entity.val, 'ABC');
-assert.equal(entity.end, 3);
+//assert.equal(entity.end, 3);
 
 arr[0] = 0xef; arr[1] = 0xbe; arr[2] = 0xbd; arr[3] = 0;
 assert.equal(bytes.scanStringZ(arr, 0, entity), 4);
@@ -143,7 +143,7 @@ bytes.putString(new Array(101).join('x'), bigbuf, 0);
 var entity = bytes.byteEntity();
 assert.equal(bytes.scanStringZ(bigbuf, 0, entity), 101);
 assert.equal(entity.val, new Array(101).join('x'));
-assert.equal(entity.end, 100);
+//assert.equal(entity.end, 100);
 
 // should cast argument to string
 fill(arr, 0xff);
@@ -155,7 +155,7 @@ assert.equal(bytes.putStringZOverlong("\x00\x00", arr, 0), 5);
 assert.deepEqual(arr.slice(0, 5), [0xc0, 0x80, 0xc0, 0x80, 0]);
 bytes.scanStringZ(arr, 0, entity);
 assert.equal(entity.val, "\x00\x00");
-assert.equal(entity.end, 4);
+//assert.equal(entity.end, 4);
 // TODO: nodejs does not correctly decode overlong-encoded C0 80 NUL characters
 // (instead, it converts them into two "EF BF BD" utf8 "replacement characters")
 // XXX assert.equal(new Buffer([0xc0, 0x80]).toString(), "\x00");

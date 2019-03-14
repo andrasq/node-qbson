@@ -28,7 +28,6 @@ var getInt64 = bytes.getInt64;
 var getFloat = bytes.getFloat64;
 var scanIntZ = bytes.scanIntZ;
 var scanStringZ = bytes.scanStringZ;
-var scanStringUtf8 = bytes.scanStringUtf8;
 
 module.exports = bson_decode;
 module.exports.getBsonEntities = getBsonEntities;
@@ -180,11 +179,11 @@ function getString( buf, base, bound ) {
     // Approach:
     // look for an [00|i|m|x] to 00 to [1..12] transition, that should be the next entity
     // Having to run the hack loop is hugely slower.
-function scanRegExp( buf, base, bound, item ) {
+function scanRegExp( buf, base, bound, entity ) {
     var s1 = { val: 0, end: 0 };
     var s2 = { val: 0, end: 0 };
-    scanStringZ(buf, base, s1);
-    var end = scanStringZ(buf, s1.end + 1, s2);
+    var end = scanStringZ(buf, base, s1);
+    end = scanStringZ(buf, end, s2);
 
     // if the regex ends on an entity bound, all is good
     // if not, must be confused by embedded zero so try to find the actual end
@@ -193,11 +192,10 @@ function scanRegExp( buf, base, bound, item ) {
              isEntityStart(buf[end])))  // an entity start (type) byte following a zero byte is the expected next-entity start
     {
         s1.val += '\x00' + s2.val;
-        s1.end = s2.end;
         end = scanStringZ(buf, end, s2);
     }
 
-    item.val = createRegExp(s1.val, s2.val);
+    entity.val = createRegExp(s1.val, s2.val);
     return end;
 
     // test whether ch starts a bson entity
@@ -228,23 +226,25 @@ function createRegExp( pattern, flags ) {
 }
 
 // recover the string entity from the bson
-function scanString( buf, base, bound, item ) {
+function scanString( buf, base, bound, entity ) {
     var len = getUInt32(buf, base);
     base += 4;
     var end = base + len - 1;
     if (buf[end] !== 0) throw new Error("invalid bson, string at " + base + " not zero terminated");
     // our pure js getString() is faster for short strings
-    item.val = (len < 20) ? bytes.getString(buf, base, end) : buf.toString('utf8', base, end);
-    return item.end = end + 1;
+    entity.val = (len < 20) ? bytes.getString(buf, base, end) : buf.toString('utf8', base, end);
+    // return entity.end = end + 1;
+    return end + 1;
 }
 
-function scanBinary( buf, base, bound, item ) {
+function scanBinary( buf, base, bound, entity ) {
     var len = getUInt32(buf, base);
     var subtype = buf[base+4];
     base += 5;
-    item.val = buf.slice(base, base+len);
-    item.val.subtype = buf[base-1];
-    return item.end = base += len;
+    entity.val = buf.slice(base, base+len);
+    entity.val.subtype = buf[base-1];
+    // return entity.end = base += len;
+    return base + len;
 
     // TODO: why does bson return the Buffer wrappered in an object?
     // { _bsontype: 'Binary', sub_type: 0, position: N, buffer: data }
