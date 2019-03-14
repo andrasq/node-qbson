@@ -93,16 +93,27 @@ assert.throws(function() { qbson.decode(new Buffer([7, 0, 0, 0, 0x55, 0, 0])) },
 // overran end
 assert.throws(function() { qbson.decode(qbson.encode({ a: {} }).slice(0, -1)) }, /overran/);
 
+// bad stored string length
+var buf = qbson.encode({ a: "foobar" });
+buf[7] = 5;  // break length (was 6+1 = 7)
+assert.throws(function() { qbson.decode(buf) }, /invalid/);
+
 // ignores invalid regex flags
 var buf = bson.serialize({ a: /foo/i });
 assert.deepEqual(String(qbson.decode(buf).a), '/foo/i');
-buf[11] = '3'.charCodeAt(0);
+buf[11] = '3'.charCodeAt(0);  // change flag to invalid '3'
 assert.deepEqual(String(qbson.decode(buf).a), '/foo/');
 
 // allows regex string containing ascii NUL (yikes)
-var buf = bson.serialize({ a: /foo/i });
-buf[8] = 0;
-assert.deepEqual(String(qbson.decode(buf).a), '/f\x00o/i');
+var buf = bson.serialize({ a: /foobar/i });
+buf[8] = 0;  // poke NUL into middle of 'foo'
+assert.deepEqual(String(qbson.decode(buf).a), '/f\x00obar/i');
+buf[9] = 0;  // poke an adjacent NUL
+assert.deepEqual(String(qbson.decode(buf).a), '/f\x00\x00bar/i');
+// FIXME: this still breaks
+// buf[12] = 0;  // wipe the trailing 'r', now ends in pretend empty flags
+// assert.deepEqual(String(qbson.decode(buf).a), '/f\x00\x00ba\x00/i');
+
 
 var buf, obj;
 

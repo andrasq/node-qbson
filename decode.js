@@ -205,7 +205,7 @@ function scanRegExp( buf, base, bound, item ) {
     function isEntityStart(ch) { return (ch >= 1 && ch <= 19 || ch === 127 || ch === 255) }
 }
 
-function createRegExp( pattern, flags ) {
+// construct a RegExp object
     // NOTE: BSON-1.0.4 omits the flags /uy when encoding, and ignores them when decoding
     // mongodb documents regex flags /imxs, php documents /imxslu
     // i - case-insesitive, m - multiline, x - ignore spaces and #-comments, s - "dotall", l - locale, u - unicode
@@ -215,10 +215,11 @@ function createRegExp( pattern, flags ) {
     // Note that the mongo shell supports its own js subset of flags, not those of mongo.
     // The mongo flags apply to searches done by mongodb itself.
     // Q: does mongo type-check regex flags when storing them?  Or just when using regexes?
-
-    // mongo knows /g as /s ("dotall"), though the semantics are different.
-    if (flags && flags.indexOf('s') >= 0) flags.replace('s', 'g');
+function createRegExp( pattern, flags ) {
     // BSON-1.0.4 only decodes the mongo flags /ims, not the other js flags /guy
+    // mongo knows /g as /s ("dotall"), though the semantics are different.
+    // Note that there is also a js flag /s with dotall semantics.
+    // if (flags && flags.indexOf('s') >= 0) flags = flags.replace('s', 'g');
 
     try {
         return new RegExp(pattern, flags);

@@ -1,7 +1,8 @@
 'use strict';
 
 var assert = require('assert');
-var BSON = new (require('bson'))();
+var util = require('util');
+var BSON = require('../bson');
 var qbson = require('../qbson');
 var bsonTypes = require('../bson-types');
 
@@ -104,13 +105,16 @@ var items = [
 // TODO: ObjectId encodes as an object with BSON
 //    new qbson.ObjectId('1234abcd1234'),
     /foo/,
-    /foo/img,
-    /foo/imguy,
+//    /foo/img, //-- bson 1.0.4 breaks test, it stores 'sim' instead of 'gim' (invalid, flags must be sorted)
+//    /foo/imguy, //-- bson 1.0.4 breaks test, it stores 'sim' instead of 'gim' (invalid, flags must be sorted)
 ];
 for (var i=0; i<items.length; i++) {
     var bytes = qbson.encode({ a: items[i] });
+    var a = qbson.decode(bytes).a;
+    // note: on node pre-v8, /g regex flag proxies for /s
+    assert.equal(String(a), String(items[i]));
     var bsonDecoded = BSON.deserialize(bytes);
     var bson = BSON.serialize({ a: items[i] }, { serializeFunctions: true });
 //console.log("AR: test", bytes, bson);
-    assert.equal(bytes.toString('hex'), bson.toString('hex'), null, "test item " + i);
+    assert.equal(bytes.toString('hex'), bson.toString('hex'), "test item " + i + ': ' + items[i] + ': ' + bytes.toString('hex') + ' vs bson ' + bson.toString('hex'));
 }

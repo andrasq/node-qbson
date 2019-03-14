@@ -32,6 +32,8 @@ module.exports = bson_encode;
 module.exports.encodeEntities = encodeEntities;
 module.exports.putInt32 = bytes.putInt32;
 
+try { var hasDotAll = /foo/s  } catch (e) { var hasDotAll = false }
+
 // TODO: make undefined encoding configurable, bson skips it
 
 function bson_encode( obj ) {
@@ -265,8 +267,12 @@ function encodeEntity( name, value, target, offset ) {
         break;
     case T_REGEXP:
         offset = putStringZOverlong(value.source, target, offset);
-        var flags = (value.global ? 's' : '') + (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '');
-        // + (value.unicode ? 'u' : '') + (value.sticky ? 'y' : '');
+        // flags must be in alphabetical order
+        // The valid BSON flags are ilmsux (i-gnoreCase, l-ocale, m-ultiline, s-dotAll-mode, u-nicode, x-verbose).
+        // node-v8.11.1 has /imsuyg (y-sticky, g-lobal), no /lx.  Node-v7 did not have /s.
+        if (hasDotAll) var flags = (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '') + (value.dotAll ? 's' : '') + (value.unicode ? 'u' : '');
+        // if dotAll is not supported, proxy it with /g like BSON-1.0.4 does.
+        else var flags = (value.ignoreCase ? 'i' : '') + (value.multiline ? 'm' : '') + (value.global ? 's' : '') + (value.unicode ? 'u' : '');
         // node-v8 supports additional flags 'u' 'y' of which only 'y' is supported by mongo 3.4 shell, neither by 2.6
         // Q: will mongo type-check regex flags?  Or just store them as-is?
         // BSON-1.0.4 omits the /uy flags when encoding and when decoding
