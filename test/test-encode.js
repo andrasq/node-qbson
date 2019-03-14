@@ -118,3 +118,6 @@ for (var i=0; i<items.length; i++) {
 //console.log("AR: test", bytes, bson);
     assert.equal(bytes.toString('hex'), bson.toString('hex'), "test item " + i + ': ' + items[i] + ': ' + bytes.toString('hex') + ' vs bson ' + bson.toString('hex'));
 }
+
+assert.deepEqual(qbson.decode(qbson.encode({ a: /foo/imsu })).a, /foo/imsu);
+['i', 'm', 's', 'u'].forEach(function(flag) { assert.deepEqual(qbson.decode(qbson.encode({ a: new RegExp('foo', flag) })).a, new RegExp('foo', flag)) });
