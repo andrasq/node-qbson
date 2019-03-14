@@ -2,7 +2,7 @@
 
 var assert = require('assert');
 var util = require('util');
-var BSON = require('../bson');
+var BSON = require('./bson');
 var qbson = require('../qbson');
 var bsonTypes = require('../bson-types');
 

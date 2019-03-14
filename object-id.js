@@ -241,7 +241,7 @@ function hexValue( code ) {
 if (process.env['NODE_TEST'] === 'object-id') {
 
 var timeit = require('qtimeit');
-var bson = require('bson');
+var bson = require('./test/bson');
 var util = require('util');
 var buffalo = require('buffalo');
 

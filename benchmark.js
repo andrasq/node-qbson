@@ -5,7 +5,7 @@
 
 var qtimeit = require('qtimeit');
 
-var BSON = require('./bson');
+var BSON = require('./test/bson');
 var qbson = require('./');
 var buffalo = require('buffalo');
 

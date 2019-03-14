@@ -1,7 +1,7 @@
 var timeit = require('qtimeit');
 var bson_decode = require('../decode');
 
-var BSON = require('../bson');
+var BSON = require('./bson');
 
 var buffalo = require('buffalo');
 buffalo.deserialize = BSON.parse;

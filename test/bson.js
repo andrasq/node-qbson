@@ -5,6 +5,9 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+// NOTE: nyc breaks with "ReferenceError: cov_9nxqz8quf is not defined" if
+// this file is excluded with -x, so move it into test/ none of which is profiled.
+
 //var bson = require('bson-v0.3.2');
 //var bson = require('bson-v0.4.23');             // 15% faster than bson3
 //var bson = require('bson-v0.5.7');              // 11% faster than bson3

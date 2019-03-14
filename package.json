@@ -20,7 +20,7 @@
 
   "scripts": {
     "test": "qnit test/test-* || return 2; done",
-    "coverage": "nyc --reporter text --reporter lcov npm test",
+    "coverage": "nyc -r text -r lcov npm test",
     "clean": "rm -rf .nyc_output coverage"
   }
 }

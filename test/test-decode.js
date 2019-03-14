@@ -1,9 +1,9 @@
 'use strict';
 
 var assert = require('assert');
-var BSON = require('../bson');
+var BSON = require('./bson');
 var qbson = require('../qbson');
-var bson = require('../bson');
+var bson = require('./bson');
 
 var data = [
     // numbers
