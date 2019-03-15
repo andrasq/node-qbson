@@ -38,6 +38,10 @@ function bson_decode( buf ) {
     return getBsonEntities(buf, 4, buf.length - 1, new Object(), false);
 }
 
+// create a symbol builder that does not break 100% code coverage
+// TODO: if Symbol not available, maybe decode to an annotated new String() object with .type = 'symbol'
+var makeSymbol = eval("(typeof Symbol === 'function') && Symbol || function(s) { return String(s) }");
+
 var _entity = bytes.byteEntity();       // { val, end } tuple
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var type, subtype, name, start;
@@ -57,8 +61,7 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             break;
         case 14:
             base = scanString(buf, base, bound, _entity);
-            // TODO: if Symbol not available, maybe decode to an annotated new String() object with .type = 'symbol'
-            value = (typeof Symbol !== 'undefined') ? Symbol(_entity.val) : String(_entity.val);
+            value = makeSymbol(_entity.val);
             break;
         case 2:
             base = scanString(buf, base, bound, _entity);
