@@ -28,7 +28,7 @@ var putStringZ = bytes.putStringZ;
 var putStringZOverlong = bytes.putStringZOverlong;
 
 // polyfills for nodejs that need it
-eval('Buffer.allocUnsafe = Buffer.allocUnsafe || function(n) { return new Buffer(n) }');
+eval('var alloc = Buffer.allocUnsafe; Object.defineProperty(Buffer, "allocUnsafe", { value: alloc || function(n) { return new Buffer(n) } })');
 eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && Buffer.from || function(a, b, c) { return new Buffer(a, b, c) } });')
 
 module.exports = bson_encode;

@@ -6,11 +6,15 @@ var BSON = require('./bson');
 var qbson = require('../qbson');
 var bsonTypes = require('../bson-types');
 
+// wrap unsupported language features in eval() to not crash during file parse
+function _tryEval(src) { try { return eval(str) } catch (e) { } }
+function _tryEvalErr(src) { try { return eval(str) } catch (e) { return err } }
+
 // tests by expected encoded hex string
 var data = [
     [ "string", "1300000002610007000000737472696e670000" ],
     [ new Buffer("AAAA"), "1100000005610004000000004141414100" ],
-    [ Symbol("Symbol Name"), "180000000e61000c00000053796d626f6c204e616d650000" ],
+    [ _tryEval('Symbol("Symbol Name")') || null, _tryEval('Symbol()') && "180000000e61000c00000053796d626f6c204e616d650000" || "08000000 <0a 6100 > 00" ],
     // NOTE: bson encodes `undefined` as value `null`
     [ undefined, "0800000006610000" ],       // T_UNDEFINED
     // [ undefined, "080000000a610000" ],          // T_NULL
@@ -58,14 +62,19 @@ for (var i=0; i<data.length; i++) {
 
     var decoded = BSON.deserialize(buf);
 
-    switch (data[i][0].constructor) {
+    if (!data[i][0]) assert.strictEqual(decoded.a, data[i][0]);
+
+    var err = _tryEvalErr('if (data[i][0].constructor === Symbol) assert.deepEqual("Symbol(" + decoded.a + ")", String(data[i][0]))');
+    if (err && !/Symbol is not defined/.test(err.message)) throw err;
+
+    switch (data[i][0] != null && data[i][0].constructor) {
     case Buffer:
         // { _bsontype: 'Binary', buffer: buf }
         assert.deepEqual(decoded.a.buffer, data[i][0]);
         break;
-    case Symbol:
-        assert.deepEqual("Symbol(" + decoded.a + ")", data[i][0].toString());
-        break;
+    // case Symbol:
+    //     assert.deepEqual("Symbol(" + decoded.a + ")", data[i][0].toString());
+    //     break;
     case qbson.ObjectId:
         assert.equal(decoded.a, String(data[i][0]));
         break;
@@ -124,5 +133,7 @@ for (var i=0; i<items.length; i++) {
     assert.equal(bytes.toString('hex'), bson.toString('hex'), "test item " + i + ': ' + items[i] + ': ' + bytes.toString('hex') + ' vs bson ' + bson.toString('hex'));
 }
 
-assert.deepEqual(qbson.decode(qbson.encode({ a: /foo/imsu })).a, /foo/imsu);
-['i', 'm', 's', 'u'].forEach(function(flag) { assert.deepEqual(qbson.decode(qbson.encode({ a: new RegExp('foo', flag) })).a, new RegExp('foo', flag)) });
+var rex = parseInt(process.versions.node) >= 8 ? /foo/imsu : /foo/im;
+var rexflags = parseInt(process.versions.node) >= 8 ? ['i', 'm', 's', 'u'] : ['i', 'm'];
+assert.deepEqual(qbson.decode(qbson.encode({ a: rex })).a, rex);
+rexflags.forEach(function(flag) { assert.deepEqual(qbson.decode(qbson.encode({ a: new RegExp('foo', flag) })).a, new RegExp('foo', flag)) });
