@@ -5,6 +5,15 @@ var BSON = require('./bson');
 var qbson = require('../qbson');
 var bson = require('./bson');
 
+// polyfills for node that need it
+assert.deepStrictEqual = assert.deepStrictEqual || assert.deepEqual;
+eval('var alloc = Buffer.allocUnsafe; Object.defineProperty(Buffer, "allocUnsafe", { value: alloc || function(n) { return new Buffer(n) } })');
+//eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && from || function(a, b, c) { return new Buffer(a, b, c) } });')
+
+// wrap unsupported language features in eval() to not crash during file parse
+function _tryEval(src) { try { return eval(str) } catch (e) { } }
+function _tryEvalErr(src) { try { return eval(str) } catch (e) { return err } }
+
 var data = [
     // numbers
     0, 1, 0.5, 1.5, 0.1, 1e20, 1e-20, 1e234, 1e-234,
@@ -127,8 +136,8 @@ var data = [
 // Symbol
 buf = new Buffer([ 0x18, 0, 0, 0, 0x0e, 0x61, 0, 0x0c, 0, 0, 0, 0x53, 0x79, 0x6d, 0x62, 0x6f, 0x6c, 0x20, 0x4e, 0x61, 0x6d, 0x65, 0, 0 ]);
 obj = qbson.decode(buf);
-assert.equal(typeof obj.a, 'symbol');
-assert.equal(obj.a.toString(), 'Symbol(Symbol Name)');
+assert.equal(typeof obj.a, (typeof Symbol !== 'undefined') ? 'symbol' : 'string'); 
+_tryEval("assert.equal(obj.a.toString(), 'Symbol(Symbol Name)');");
 
 // field names
 var arr = [];

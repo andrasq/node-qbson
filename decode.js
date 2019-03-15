@@ -57,7 +57,8 @@ function getBsonEntities( buf, base, bound, target, asArray ) {
             break;
         case 14:
             base = scanString(buf, base, bound, _entity);
-            value = Symbol(_entity.val);
+            // TODO: if Symbol not available, maybe decode to an annotated new String() object with .type = 'symbol'
+            value = (typeof Symbol !== 'undefined') ? Symbol(_entity.val) : String(_entity.val);
             break;
         case 2:
             base = scanString(buf, base, bound, _entity);
