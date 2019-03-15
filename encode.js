@@ -93,7 +93,7 @@ var T_BINARY_USER_DEFINED = 5;  // subtype 128
 // TODO: distinguish symbol from string
 function determineTypeId( value ) {
     switch (typeof value) {
-    case 'number': return ((value >> 0) === value) ? T_INT : T_FLOAT; // also NaN and +/- Infinity
+    case 'number': return ((value >> 0) === value && value !== -0) ? T_INT : T_FLOAT; // also NaN and +/- Infinity
     case 'string': return T_STRING;
     case 'boolean': return T_BOOLEAN;
     case 'undefined': return T_UNDEFINED;

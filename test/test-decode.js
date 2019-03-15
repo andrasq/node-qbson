@@ -42,7 +42,8 @@ var data = [
     {}, {x:1}, {x:{y:{}}},
 ];
 for (var i=0; i<data.length; i++) {
-    var buf = BSON.serialize({ a: data[i] }, { serializeFunctions: true });
+    if (typeof data[i] === 'number') var buf = qbson.encode({ a: data[i] });
+    else var buf = BSON.serialize({ a: data[i] }, { serializeFunctions: true });
     if (isNaN(data[i])) assert(isNaN(qbson.decode(buf).a));
     else assert.deepStrictEqual(qbson.decode(buf).a, data[i]);
 }
