@@ -13,8 +13,10 @@ function _tryEvalErr(src) { try { return eval(str) } catch (e) { return err } }
 // tests by expected encoded hex string
 var data = [
     [ "string", "1300000002610007000000737472696e670000" ],
+    [ "str\x00ng", "1300000002610007000000737472006e670000" ],
     [ new Buffer("AAAA"), "1100000005610004000000004141414100" ],
-    [ _tryEval('Symbol("Symbol Name")') || null, _tryEval('Symbol()') && "180000000e61000c00000053796d626f6c204e616d650000" || "08000000 <0a 6100 > 00" ],
+    [ (typeof Symbol !== 'undefined') ? Symbol('Symbol Name') : null, (typeof Symbol !== 'undefined') ? "180000000e61000c00000053796d626f6c204e616d650000" : "08000000 <0a 6100 > 00" ],
+    // [ _tryEval('Symbol("Symbol Name")') || null, _tryEval('Symbol()') && "180000000e61000c00000053796d626f6c204e616d650000" || "08000000 <0a 6100 > 00" ],
     // NOTE: bson encodes `undefined` as value `null`
     [ undefined, "0800000006610000" ],       // T_UNDEFINED
     // [ undefined, "080000000a610000" ],          // T_NULL
@@ -24,6 +26,7 @@ var data = [
     [ new qbson.MinKey(), "08000000ff610000" ],
     [ new qbson.MaxKey(), "080000007f610000" ],
 
+    [ function (ab) { return 123 }, "29000000 <0d 6100 1d000000 '66756e6374696f6e 202861622920 7b20 72657475726e20313233 207d'+00> 00" ],
     [ new String("abc"), "10000000 02 6100 04000000 61626300 00" ],
     // NOTE: BSON.serialize encodes `new Number(1)` as the empty object {}
     [ new Number(1), "0c000000 10 6100 01000000 00" ],

@@ -246,10 +246,7 @@ function encodeEntity( name, value, target, offset ) {
     case T_FUNCTION:
         // function types were changed to string already, fall through
     case T_STRING:
-        start = offset;
-        offset = putStringZ(value, target, offset+4);
-        // length includes terminating 0 but not the length bytes
-        putInt32(offset-start-4, target, start);
+        offset = putString(String(value), target, offset);
         break;
     case T_OBJECTID:
         offset = value.copyToBuffer(target, offset);
@@ -319,10 +316,12 @@ function encodeEntity( name, value, target, offset ) {
     return offset;
 }
 
+// <4B length> <string of length - 1 bytes> <NUL>
 function putString( str, target, offset ) {
     var start = offset;
     offset = bytes.putString(str, target, offset + 4);
     target[offset++] = 0;
+    // length includes terminating 0 but not the length bytes
     putInt32(offset - start - 4, target, start);
     return offset;
 }
