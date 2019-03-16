@@ -12,7 +12,7 @@
 
 var bytes = require('./bytes.js');
 var bsonTypes = require('./bson-types.js');
-//var determineTypeId = require('./lib/bson-size.js').determineTypeId;
+var determineTypeId = require('./lib/bson-size.js').determineTypeId;
 var guessSize = require('./lib/bson-size').guessSize;
 
 var ObjectId = bsonTypes.ObjectId;
@@ -103,45 +103,6 @@ var T_BINARY_UUID = 5;          // subtype 3
 var T_BINARY_MD5 = 5;           // subtype 5
 var T_BINARY_USER_DEFINED = 5;  // subtype 128
 
-// see also buffalo and json-simple for typing
-// TODO: distinguish symbol from string
-function determineTypeId( value ) {
-    switch (typeof value) {
-    case 'number': return ((value >> 0) === value && value !== -0) ? T_INT : T_FLOAT; // also NaN and +/- Infinity
-    case 'string': return T_STRING;
-    case 'boolean': return T_BOOLEAN;
-    case 'undefined': return T_UNDEFINED;
-    case 'function': return T_FUNCTION;
-    case 'symbol': return T_SYMBOL;
-    case 'object': return (value === null) ? T_NULL
-        //: (Array.isArray(value)) ? T_ARRAY
-        : (value.constructor === Array) ? T_ARRAY
-        : determineClassTypeId(value)
-    }
-}
-
-// determine the type id of instances of special classes
-// note that eg `Number(3)` is type 'number', but `new Number(3)` is 'object'
-// (same holds for string, bool)
-function determineClassTypeId( value ) {
-    switch (value.constructor) {
-    //case Array: return T_ARRAY; // handled above
-    case ObjectId: return T_OBJECTID;
-    case Date: return T_DATE;
-    case RegExp: return T_REGEXP;
-    case Buffer: return T_BINARY;
-    case Number: return ((value >> 0) == value && value != -0) ? T_INT : T_FLOAT;
-    case String: return T_STRING;
-    case Boolean: return T_BOOLEAN;
-    case ScopedFunction: return T_SCOPED_CODE;
-    case Timestamp: return T_TIMESTAMP;
-    case Long: return T_LONG;
-    case DbRef: return T_DBREF;
-    case MinKey: return T_MINKEY;
-    case MaxKey: return T_MAXKEY;
-    default: return T_OBJECT;
-    }
-}
 
 function encodeEntities( obj, target, offset ) {
     var key, start = offset;

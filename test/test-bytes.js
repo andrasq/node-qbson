@@ -85,6 +85,9 @@ buf[14] = 0;
 assert.equal(bytes.scanStringZ(buf, 0, entity), 15);
 assert.equal(entity.val, 'BAAAAAAAAAAAAA');
 //assert.equal(entity.end, 14);
+assert.equal(bytes.scanStringZ(new Buffer("xxxxxxxxxxxxxxxxabcd"), 0, entity), 20);
+assert.equal(bytes.scanStringZ(new Buffer("xxxxxxxxxxxxxxxxabcd\x00"), 0, entity), 21);
+assert.equal(bytes.scanStringZ(new Buffer("xxxxxxxxxxxxxxxxabcd\x00\x00"), 0, entity), 21);
 
 var entity = bytes.byteEntity();
 fill(arr, 0x41);
