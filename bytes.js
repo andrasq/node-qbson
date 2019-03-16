@@ -151,7 +151,7 @@ function scanIntZ( buf, base, entity ) {
 //function findFirstZero(buf, base) { while (buf[base]) base++; return base }
 function scanStringZ( buf, base, entity ) {
     var bound = findIndexOf(0, buf, base, buf.length);
-    if (bound - base <= 10) {
+    if (bound - base <= 10 || buf instanceof Array) {
         entity.val = utf8.readZ(buf, base, entity);
         return entity.end < buf.length ? entity.end + 1 : entity.end;
     } else {
