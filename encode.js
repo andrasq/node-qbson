@@ -202,7 +202,9 @@ function encodeEntity( name, value, target, offset ) {
         offset += value.length;
         break;
     case T_LONG:
-        offset = value.put(target, offset);
+        putInt32(value.lo, target, offset);
+        putInt32(value.hi, target, offset+4);
+        offset += 8;
         break;
     case T_DBREF:
         // deprecated, even mongod shell encodes it as a type 3 object { $ref, $id }

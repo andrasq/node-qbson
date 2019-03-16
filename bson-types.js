@@ -162,25 +162,15 @@ function Long( highWord, lowWord ) {
     this.hi = +highWord;
     this.lo = +lowWord;
 }
-Long.prototype.get = function get( buf, base ) {
-    this.lo = bytes.getInt32(buf, base);
-    this.hi = bytes.getInt32(buf, base+4);
-}
-Long.prototype.put = function put( buf, offset ) {
-    bytes.putInt32(this.lo, buf, offset);
-    bytes.putInt32(this.hi, buf, offset+4);
-    return offset + 8;
-}
 var tmpbuf8 = [,,,,,,,,];
 Long.fromNumber = function createLongFromNumber( n ) {  // mongo compat
-    var ret = new Long(0, 0);
     bytes.putInt64(n, tmpbuf8, 0);
-    ret.get(tmpbuf8, 0);
-    return ret;
+    return new Long(bytes.getUInt32(tmpbuf8, 4), bytes.getUInt32(tmpbuf8, 0));
 }
 // Note: having a valueOf() method makes util.inspect report that this is a Number
 Long.prototype.valueOf = function valueOf( ) {          // mongo example compat
-    this.put(tmpbuf8, 0);
+    bytes.putInt32(this.lo, tmpbuf8, 0);
+    bytes.putInt32(this.hi, tmpbuf8, 4);
     return bytes.getInt64(tmpbuf8, 0);
 }
 Long.prototype = toStruct(Long.prototype);
