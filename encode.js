@@ -68,10 +68,10 @@ function bson_encode( obj ) {
     return buf.slice(0, offset);
 
     // if buffer size was close enough, use it
-    if (buf.length <= 2 * offset) return buf.slice(0, offset);
-    var ret = Buffer.allocUnsafe(offset);
-    buf.copy(ret);
-    return ret;
+    //if (buf.length <= 2 * offset) return buf.slice(0, offset);
+    //var ret = Buffer.allocUnsafe(offset);
+    //buf.copy(ret);
+    //return ret;
 }
 
 var T_FLOAT = 1;        // 64-bit IEEE 754 float
