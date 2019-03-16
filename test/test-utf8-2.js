@@ -9,6 +9,8 @@
 
 var utf8 = require('../lib/utf8-2');
 
+eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && from || function(a, b, c) { return new Buffer(a, b, c) } });')
+
 module.exports = {
     before: function(done) {
         this.testStrings = [
@@ -81,6 +83,28 @@ module.exports = {
             t.done();
         },
 
+        'should write overlong': function(t) {
+            var buf = [0, 0, 0, 0, 0, 0];
+            utf8.write(buf, 0, "A\x00B", 0, 3, true);
+            t.deepEqual(buf, [0x41, 0xC0, 0x80, 0x42, 0, 0]);
+            t.done();
+        },
+
+        'should convert clipped multi-byte chars into \ufffd BADCHAR': function(t) {
+            t.equal(utf8.read([0xC0]), '\ufffd');
+            t.equal(utf8.read([0xE0]), '\ufffd');
+            t.equal(utf8.read([0xF0]), '\ufffd');
+            t.equal(utf8.read([0xE0, 0x80]), '\ufffd\ufffd');
+            t.equal(utf8.read([0xE0, 0x41]), '\ufffd\u0041');
+            t.equal(utf8.read([0xF0, 0x80]), '\ufffd\ufffd');
+            t.equal(utf8.read([0xF0, 0x41]), '\ufffd\u0041');
+            t.equal(utf8.read([0xF0, 0x80, 0x80]), '\ufffd\ufffd\ufffd');
+            t.equal(utf8.read([0xF0, 0x80, 0x41]), '\ufffd\ufffd\u0041');
+            t.equal(utf8.read([0xF0, 0x41, 0x80]), '\ufffd\u0041\ufffd');
+            t.equal(utf8.read([0xF0, 0x41, 0x42]), '\ufffd\u0041\u0042');
+            t.done();
+        },
+
         'speed': function(t) {
             var x, buf = new Buffer(100);
 
@@ -104,6 +128,53 @@ module.exports = {
             console.timeEnd('buf.write 24');
             // breakeven around 28
 
+            t.done();
+        },
+    },
+
+    'utf8_readZ': {
+        'should read': function(t) {
+            var tests = this.testStrings;
+            var buf = new Buffer(100);
+
+            for (var i = 0; i < tests.length; i++) {
+                var nb = buf.write(tests[i]);
+                buf[nb] = 0;
+                t.equal(utf8.readZ(buf, 0, nb), buf.toString('utf8', 0, nb), " test " + i);
+            }
+
+            t.done();
+        },
+
+        'should read until the first zero': function(t) {
+            t.equal(utf8.readZ([64, 65, 66, 0, 67, 68], 1), "AB");
+            t.done();
+        },
+
+        'should set endp.end': function(t) {
+            var endp = { end: -1 };
+            t.equal(utf8.readZ([64, 65, 66, 0, 67, 68], 1, 0, endp), "AB");
+            t.equal(endp.end, 3);
+            t.done();
+        },
+
+        'should convert bad char leading bytes into BADCHAR \ufffd': function(t) {
+            t.equal(utf8.readZ([0x91, 0]), '\uFFFD');
+            t.done();
+        },
+
+        'should convert clipped multi-byte chars into BADCHAR \ufffd': function(t) {
+            t.equal(utf8.readZ([0xC0, 0, 0]), '\ufffd');
+            t.equal(utf8.readZ([0xE0, 0, 0]), '\ufffd');
+            t.equal(utf8.readZ([0xF0, 0, 0]), '\ufffd');
+            t.equal(utf8.readZ([0xE0, 0x80, 0]), '\ufffd\ufffd');
+            t.equal(utf8.readZ([0xE0, 0x41, 0, 0]), '\ufffd\u0041');
+            t.equal(utf8.readZ([0xF0, 0x80, 0]), '\ufffd\ufffd');
+            t.equal(utf8.readZ([0xF0, 0x41, 0]), '\ufffd\u0041');
+            t.equal(utf8.readZ([0xF0, 0x80, 0x80, 0]), '\ufffd\ufffd\ufffd');
+            t.equal(utf8.readZ([0xF0, 0x80, 0x41, 0]), '\ufffd\ufffd\u0041');
+            t.equal(utf8.readZ([0xF0, 0x41, 0x80, 0]), '\ufffd\u0041\ufffd');
+            t.equal(utf8.readZ([0xF0, 0x41, 0x42, 0]), '\ufffd\u0041\u0042');
             t.done();
         },
     },
@@ -147,6 +218,13 @@ module.exports = {
             t.done();
         },
 
+        'should set endp.end if provided': function(t) {
+            var item = { val: 0, end: -1 };
+            t.equal(utf8.read([0x40, 0x41, 0xC0, 0x80, 0x42, 0x43], 1, 5, item), "A\x00B");
+            t.equal(item.end, 5);
+            t.done();
+        },
+
         'speed': function(t) {
             var x;
 
@@ -176,3 +254,4 @@ module.exports = {
     },
 }
 
+function toHex(str) { return Buffer.from(str).toString('hex') }
