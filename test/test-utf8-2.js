@@ -7,7 +7,7 @@
 
 'use strict';
 
-var utf8 = require('../utf8-2');
+var utf8 = require('../lib/utf8-2');
 
 module.exports = {
     before: function(done) {
