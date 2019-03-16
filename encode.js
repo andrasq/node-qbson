@@ -12,6 +12,8 @@
 
 var bytes = require('./bytes.js');
 var bsonTypes = require('./bson-types.js');
+//var determineTypeId = require('./lib/bson-size.js').determineTypeId;
+var guessSize = require('./lib/bson-size').guessSize;
 
 var ObjectId = bsonTypes.ObjectId;
 var Timestamp = bsonTypes.Timestamp;
@@ -32,7 +34,6 @@ eval('var alloc = Buffer.allocUnsafe; Object.defineProperty(Buffer, "allocUnsafe
 eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && from || function(a, b, c) { return new Buffer(a, b, c) } });')
 
 module.exports = bson_encode;
-//module.exports.guessSize = guessSize;
 module.exports.encodeEntities = encodeEntities;
 module.exports.putInt32 = bytes.putInt32;
 
@@ -128,70 +129,6 @@ function determineClassTypeId( value ) {
     default: return T_OBJECT;
     }
 }
-
-// estimate how many bytes will be required to store the item
-// must never underestimate the size, but ok to guess too high
-/**
-function guessCompoundSize( item ) {
-    var contentsSize = 0, i, key;
-    if (Array.isArray(item)) {
-        for (i=0; i<item.length; i++) {
-            // typeId + name + value 
-            if (item[i] !== undefined) contentsSize += (1) + (3 * ('' + i).length + 1) + guessSize(item[i]);
-        }
-    }
-    else {
-        for (key in item) {
-            // typeId + name + value 
-            contentsSize += (1) + (3 * key.length + 1) + guessSize(item[key]);
-        }
-    }
-    // length + contents + NUL byte
-    return 4 + contentsSize + 1;
-}
-**/
-
-// estimate the _most_ bytes the value will occupy.  Never guess too low.
-// The first switch maps the common sizes, a second switch the more obscure ones.
-/**
-function guessSize( value ) {
-    var id = determineTypeId(value);
-    // TODO: if (bsonTypes.typeInfo[id].size > 0) return bsonTypes.typeInfo[id].size + bsonTypes.typeInfo[id].fixup;
-    switch (id) {
-    case T_INT: return 4;
-    case T_FLOAT: return 8;
-    case T_STRING: return 4 + 3 * value.length + 1;
-    case T_OBJECTID: return 12;
-    case T_BOOLEAN: return 1;
-    case T_UNDEFINED: return 0;
-    case T_NULL: return 0;
-    case T_DATE: return 8;
-    case T_OBJECT: return guessCompoundSize(value);
-    case T_ARRAY: return guessCompoundSize(value);
-    case T_REGEXP: return 3 * value.source.length + 1 + 6 + 1;
-    default: return guessVariableSize(id, value);
-    }
-}
-**/
-// Its 40% faster to use a second switch than to exceed 600 chars (not inline),
-// with only 3% penalty if having to use the second switch as well.
-/**
-function guessVariableSize( id, value ) {
-    switch (id) {
-    case T_SYMBOL: return 4 + 3 * value.toString().length - 8 + 1;
-    case T_FUNCTION: return 4 + 3 * value.toString().length + 1;
-    case T_BINARY: return 5 + value.length;
-    case T_TIMESTAMP: return 8;
-    case T_LONG: return 8;
-    case T_DBREF: return guessSize({ $ref: value.$ref, $id: value.$id, $db: value.$db });
-    case T_MINKEY: return 0;
-    case T_MAXKEY: return 0;
-    case T_SCOPED_CODE: return 4 + guessSize(String(value.func)) + guessSize(value.scope);
-
-    default: throw new Error("unknown size of " + (typeof value));
-    }
-}
-**/
 
 function encodeEntities( obj, target, offset ) {
     var key, start = offset;
