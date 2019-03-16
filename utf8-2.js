@@ -10,6 +10,7 @@
 module.exports = {
     write: utf8_write,
     read: utf8_read,
+    readZ: utf8_readZ,
 
     // encodeUtf8: function(s, fm, to, into, pos) { return utf8_write(into, pos, str, fm, to) },
     // encodeUtf8Overlong: function(s, fm, to, into, pos) { return utf8_write(into, pos, str, fm, to, true) },
@@ -61,7 +62,7 @@ function write4(ch, buf, ix) {
 // presumed-valid read, does not validate input.  Use to scan known good utf8.
 // Does not error out on overlong-encoded surrogate pairs or codepoints.
 // TODO: readZ would be faster than having to find the bound first
-function utf8_read( buf, base, bound ) {
+function utf8_read( buf, base, bound, endp ) {
     base = base || 0;
     bound = bound != null ? bound : buf.length;
     var code, str = '';
@@ -76,6 +77,7 @@ function utf8_read( buf, base, bound ) {
 // TODO: only if i + 3 < bound
         else { str += utf8_read4(buf, i); i += 4 - 1 }
     }
+    if (endp) endp.end = i;
     return str;
 }
 function utf8_read4(buf, i) {
@@ -85,6 +87,22 @@ function utf8_read4(buf, i) {
         ? String.fromCharCode(codepoint)                                        // overlong-encoded utf16
         : String.fromCharCode(0xD800 | ((codepoint - 0x10000) >> 10) & 0x3FF) + // surrogate pair
           String.fromCharCode(0xDC00 | ((codepoint - 0x10000)      ) & 0x3FF);
+}
+
+function utf8_readZ( buf, base, endp ) {
+    base = base || 0;
+    var code, str = '';
+    for (var i=base; buf[i]; i++) {
+        var ch = buf[i];
+        if (ch < 0x80) str += String.fromCharCode(ch);
+        else if (ch < 0xC0) str += BADCHAR;
+        else if (ch < 0xE0 && buf[i+1]) str += String.fromCharCode(((ch & 0x1F) << 6) | (buf[++i] & 0x3F));
+        else if (ch < 0xF0 && buf[i+1] && buf[i+2]) str += String.fromCharCode(((ch & 0x0F) << 12) | ((buf[++i] & 0x3F) << 6) | (buf[++i] & 0x3F));
+        else if (buf[i+1] && buf[i+2] && buf[i+3]) { str += utf8_read4(buf, i); i += 4 - 1 }
+        else str += BADCHAR;
+    }
+    if (endp) endp.end = i;
+    return str;
 }
 
 /**
