@@ -139,15 +139,23 @@ function scanIntZ( buf, base, entity ) {
 }
 
 // get the NUL-terminated utf8 "cstring" string
-// TODO: this needs utf8.readZ, optimized to not have to scan for the NUL byte
+//
+// - breakeven vs buf.toString() is around 13 chars (node 5; more with node 6)
+// - note that cannot rely on native js toString if using overlong encoding.
+// - node-v10 and up are much slower than before for both, breakeven around 11.
+// - the separate findFirstZero test test adds 8% decode overhead
+// - decoding names with toString is much faster for long strings (50% for uuid),
+//   but slows decode rates to that of bson/buffalo.
+//
 function scanStringZ( buf, base, entity ) {
-    // breakeven vs buf.toString() is around 13 chars (node 5; more with node 6)
-    // note that cannot rely on native js toString if using overlong encoding.
-    // node-v10 and up are much slower than before for both, breakeven around 11.
     var bound = findIndexOf(0, buf, base, buf.length);
-    entity.val = getString(buf, base, bound);
-    // entity.end = bound;
-    return buf[bound] === 0 ? bound + 1 : bound;
+    if (bound - base <= 10) {
+        entity.val = utf8.readZ(buf, base, entity);
+        return entity.end < buf.length ? entity.end + 1 : entity.end;
+    } else {
+        entity.val = buf.toString('utf8', base, bound);
+        return bound < buf.length ? bound + 1 : bound;
+    }
 }
 
 // get the NUL-terminated utf8 string.  Note that utf8 allows embedded NUL chars.
