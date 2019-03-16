@@ -43,22 +43,35 @@ module.exports.putInt32 = bytes.putInt32;
 function bson_encode( obj ) {
     // 28% faster to guess at buffer size instead of calcing exact size
     // it is 23% slower to compose into an array and then make that into a buffer
-    // var buf = Buffer.allocUnsafe(guessSize(obj));
+    // Note: walking the tree, checking types and guessing the size adds 25% overhead over just guessing high and slicing
+    // 10% of this overhead is Buffer.byteLength
+    var size = guessSize(obj);
+//var size = 1000;
+    var buf = Buffer.allocUnsafe(size);
+
+//var buf = Buffer.allocUnsafe(1000);
+    //var info = parseItem('', obj);
+//console.log(info);
+    //var buf = Buffer.allocUnsafe(info.sz);
+    // NOTE: guessSize is 50% faster than parseItem, but the parse tree could speed encoding
+    // parseItem adds 60% runtime to the encoding with guessSize
 
     // node-v6 and up are much faster writing an array than a Buffer, so convert at the end
     // It is much faster to populate an empty array than to guess at the final size.
-    var buf = new Array();
+    // NOTE: it is much *much* slower to poke long strings into an array than to use buffer.write.
+    // var buf = new Array();
 
     var offset = encodeEntities(obj, buf, 0);
-    return Buffer.from(buf);
+    // return Buffer.from(buf);
 
-/**
+    // copying buffer contents below adds 25% overhead, so instead guess right and slice
+    return buf.slice(0, offset);
+
     // if buffer size was close enough, use it
     if (buf.length <= 2 * offset) return buf.slice(0, offset);
     var ret = Buffer.allocUnsafe(offset);
     buf.copy(ret);
     return ret;
-**/
 }
 
 var T_FLOAT = 1;        // 64-bit IEEE 754 float
@@ -223,6 +236,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = putInt32(value.length, target, offset);
         target[offset++] = value.subtype || 0;
         // copy the bytes without needing them to be in a Buffer
+        // FIXME: buffer-to-buffer would be faster to .copy
         for (var i = 0; i < value.length; i++) target[offset + i] = value[i];
         offset += value.length;
         break;

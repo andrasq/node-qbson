@@ -46,7 +46,7 @@ var datasets = {
     //'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
     //'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
     'anav2 item': anav2,
-    //'anav2r item': anav2r,
+    'anav2r item': anav2r,
 // FIXME: encode for this is *very* slow... because it exceeds the magic 100k fast-array limit? but only pushing chars!
 // A: because cannot array.write the string into the array, must copy byte-by-byte.  Or build a tree of objects, and just make a buffer out of long strings?
 //'test': { 'very large payload': 'x'.repeat(100000) }
