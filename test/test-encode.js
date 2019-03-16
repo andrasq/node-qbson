@@ -140,3 +140,9 @@ var rex = parseInt(process.versions.node) >= 8 ? /foo/imsu : /foo/im;
 var rexflags = parseInt(process.versions.node) >= 8 ? ['i', 'm', 's', 'u'] : ['i', 'm'];
 assert.deepEqual(qbson.decode(qbson.encode({ a: rex })).a, rex);
 rexflags.forEach(function(flag) { assert.deepEqual(qbson.decode(qbson.encode({ a: new RegExp('foo', flag) })).a, new RegExp('foo', flag)) });
+
+// custom classes encode as objects
+function MyClass() { this.a = 1; }
+var buf = qbson.encode({ a: new MyClass() });
+var buf2 = qbson.encode({ a: { a: 1 } });
+assert.deepEqual(buf, buf2);
