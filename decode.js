@@ -42,6 +42,14 @@ function bson_decode( buf ) {
 // TODO: if Symbol not available, maybe decode to an annotated new String() object with .type = 'symbol'
 var makeSymbol = eval("(typeof Symbol === 'function') && Symbol || function(s) { return String(s) }");
 
+// note; having to scan for end-of-string impacts name decode, but using buf.indexOf is even slower
+// function findFirstZero(buf, base) { if (buf.indexOf) { var ix = buf.indexOf(0); return (ix < 0) ? buf.length : ix } while (buf[base]) base++; return base }
+//function findFirstZero(buf, base) { while (buf[base]) base++; return base }
+//function scanStringZ(buf, base, entity) { return scanString(buf, base, findFirstZero(buf, base), entity) }
+// using toString is slightly faster for long names? maybe?
+//function scanStringZ(buf, base, entity) { var len = findFirstZero(buf, base); entity.val = buf.toString('utf8', base, len); return len + 1 }
+
+
 var _entity = bytes.byteEntity();       // { val, end } tuple
 function getBsonEntities( buf, base, bound, target, asArray ) {
     var type, subtype, name, start;
@@ -186,6 +194,7 @@ function getString( buf, base, bound ) {
 function scanRegExp( buf, base, bound, entity ) {
     var s1 = { val: 0, end: 0 };
     var s2 = { val: 0, end: 0 };
+    // TODO: pass option to scanStringZ to decode overlong-encoded strings
     var end = scanStringZ(buf, base, s1);
     end = scanStringZ(buf, end, s2);
 
@@ -235,8 +244,8 @@ function scanString( buf, base, bound, entity ) {
     base += 4;
     var end = base + len - 1;
     if (buf[end] !== 0) throw new Error("invalid bson, string at " + base + " not zero terminated");
-    // our pure js getString() is faster for short strings
-    entity.val = (len < 20) ? bytes.getString(buf, base, end) : buf.toString('utf8', base, end);
+    // our pure js getString() is faster only for short strings
+    entity.val = (len <= 10) ? bytes.getString(buf, base, end) : buf.toString('utf8', base, end);
     // return entity.end = end + 1;
     return end + 1;
 }

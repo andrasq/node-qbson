@@ -117,7 +117,7 @@ function determineClassTypeId( value ) {
     case Date: return T_DATE;
     case RegExp: return T_REGEXP;
     case Buffer: return T_BINARY;
-    case Number: return ((value >> 0) === +value) ? T_INT : T_FLOAT;
+    case Number: return ((value >> 0) == value && value != -0) ? T_INT : T_FLOAT;
     case String: return T_STRING;
     case Boolean: return T_BOOLEAN;
     case ScopedFunction: return T_SCOPED_CODE;

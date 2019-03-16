@@ -146,7 +146,9 @@ function scanIntZ( buf, base, entity ) {
 // - the separate findFirstZero test test adds 8% decode overhead
 // - decoding names with toString is much faster for long strings (50% for uuid),
 //   but slows decode rates to that of bson/buffalo.
+// TODO: option to always use readZ for overlong-encoded names (eg regexes)
 //
+//function findFirstZero(buf, base) { while (buf[base]) base++; return base }
 function scanStringZ( buf, base, entity ) {
     var bound = findIndexOf(0, buf, base, buf.length);
     if (bound - base <= 10) {
@@ -178,6 +180,7 @@ function findIndexOf( ch, buf, base, bound ) {
     for (var i = base; i < bound; i++) if (buf[i] === ch) return i;
     return bound;
 }
+// TODO: rename to findFirstZero: function findFirstZero(buf, base) { while (buf[base]) base++; return base }
 
 function putStringZ( s, target, offset ) {
     if (typeof s !== 'string') s = '' + s;
