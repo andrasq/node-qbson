@@ -13,6 +13,19 @@ var str250 = new Array(51).join('xxxxx');
 var str250utf8 = new Array(51).join('xxxx\x00ff');
 var array100 = []; for (var i=0; i<100; i++) array100[i] = i;
 var object100 = {}; for (var i=0; i<100; i++) object100[i] = i;
+var anav2r = {
+    _id: '20190317.itemtype1234', cc: 12345, au: 12, tu: 123, ds: 1234567, fs: 123456
+};
+var anav2 = {
+    _id: '20190317.itemtype1234',
+    lmt: new Date().toISOString(),
+    u: {
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: null,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: null,
+        cccccccccccccccccccccccccccccccccccc: null,
+        dddddddddddddddddddddddddddddddddddd: null,
+    }
+};
 var datasets = {
 //    'int': 1234,
 //    'float': 1234.5,
@@ -29,9 +42,14 @@ var datasets = {
 //    'nested array[5]': [1,[2,[3,[4,[5]]]]],
 //    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
     // ObjectId
-    'test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
-    // 'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
-//    'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
+    'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
+    //'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
+    //'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
+    'anav2 item': anav2,
+    //'anav2r item': anav2r,
+// FIXME: encode for this is *very* slow... because it exceeds the magic 100k fast-array limit? but only pushing chars!
+// A: because cannot array.write the string into the array, must copy byte-by-byte.  Or build a tree of objects, and just make a buffer out of long strings?
+//'test': { 'very large payload': 'x'.repeat(100000) }
 }
 var x;
 
@@ -44,14 +62,21 @@ qtimeit.bench.showRunDetails = false;
 
 for (k in datasets) {
     var data = { a: datasets[k] };
-    console.log("\n%s ----", k, data);
+    console.log("\n%s ----", k, JSON.stringify(data).slice(0, 400));
 
-    // var bytes = BSON.serialize(data);
-    var bytes = qbson.encode(data);
+    var bytes = BSON.serialize(data);
+    // var bytes = qbson.encode(data);
     var xj = createBuffer(JSON.stringify(data));
     var y;
 
-if (1)
+if (0)
+    qtimeit.bench({
+        'qbson.encode': function() {
+            x = qbson.encode(data);
+        },
+    })
+
+if (0)
     qtimeit.bench({
         'bson': function() {
             x = BSON.serialize(data);
@@ -59,11 +84,11 @@ if (1)
         'buffalo.serialize': function() {
             x = buffalo.serialize(data);
         },
-        'qbson': function() {
-            x = qbson.encode(data);
-        },
         'json': function() {
             x = createBuffer(JSON.stringify(data));
+        },
+        'qbson': function() {
+            x = qbson.encode(data);
         },
     })
 
@@ -75,13 +100,14 @@ if (1)
         'buffalo.parse': function() {
             y = buffalo.parse(bytes);
         },
-        'qbson': function() {
-            y = qbson.decode(bytes);
-        },
         'json': function() {
             y = JSON.parse(xj);
+        },
+        'qbson': function() {
+            y = qbson.decode(bytes);
         },
     })
     qtimeit.bench.showPlatformInfo = false;
 }
-console.log(y);
+//console.log(x.length, JSON.stringify(x).slice(0, 400));
+if (x) console.log(x.length, x);
