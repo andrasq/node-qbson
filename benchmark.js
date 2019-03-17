@@ -3,6 +3,8 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+// npm install qtimeit bson buffalo 
+
 var qtimeit = require('qtimeit');
 
 var BSON = require('./test/bson');
@@ -76,7 +78,7 @@ if (0)
         },
     })
 
-if (0)
+if (1)
     qtimeit.bench({
         'bson': function() {
             x = BSON.serialize(data);
@@ -110,4 +112,5 @@ if (1)
     qtimeit.bench.showPlatformInfo = false;
 }
 //console.log(x.length, JSON.stringify(x).slice(0, 400));
-if (x) console.log(x.length, x);
+//if (x) console.log(x.length, x);
+if (y) console.log(JSON.stringify(y).slice(0, 400));
