@@ -8,10 +8,7 @@
 'use strict';
 
 var utf8 = require('../lib/utf8-2');
-
-// coverage-safe polyfills for node that need it
-eval('if (!Buffer.alloc) Buffer.alloc = Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
-eval('if (parseInt(process.versions.node) < 6) { Object.defineProperty(Buffer, "from", { writable: true, value: function(a, b, c) { return new Buffer(a, b, c) } }) };');
+var newBuffer = require('../lib/new-buffer');
 
 module.exports = {
     before: function(done) {
@@ -36,8 +33,8 @@ module.exports = {
     'utf8_write': {
         'should write': function(t) {
             var tests = this.testStrings;
-            var sysbuf = new Buffer(200);
-            var buf = new Buffer(200);
+            var sysbuf = newBuffer.new(200);
+            var buf = newBuffer.new(200);
 
             for (var i = 0; i < tests.length; i++) {
                 var sysLength = sysbuf.write(tests[i]);
@@ -108,7 +105,7 @@ module.exports = {
         },
 
         'speed': function(t) {
-            var x, buf = new Buffer(100);
+            var x, buf = newBuffer.new(100);
 
             var str = "xxxxxxxx";
             console.time('write 8');
@@ -137,7 +134,7 @@ module.exports = {
     'utf8_readZ': {
         'should read': function(t) {
             var tests = this.testStrings;
-            var buf = new Buffer(100);
+            var buf = newBuffer.new(100);
 
             for (var i = 0; i < tests.length; i++) {
                 var nb = buf.write(tests[i]);
@@ -184,7 +181,7 @@ module.exports = {
     'utf8.read': {
         'should read': function(t) {
             var tests = this.testStrings;
-            var buf = new Buffer(100);
+            var buf = newBuffer.new(100);
 
             for (var i = 0; i < tests.length; i++) {
                 var nb = buf.write(tests[i]);
@@ -195,7 +192,7 @@ module.exports = {
         },
 
         'should read the entire buffer by default': function(t) {
-            var buf = new Buffer("Hello, world.");
+            var buf = newBuffer.new("Hello, world.");
             t.equal(utf8.read(buf), "Hello, world.");
             t.done();
         },
@@ -230,17 +227,17 @@ module.exports = {
         'speed': function(t) {
             var x;
 
-            var buf = new Buffer("xxxxxxxx");
+            var buf = newBuffer.new("xxxxxxxx");
             console.time('read 8');
             for (var i=0; i<1000000; i++) x = utf8.read(buf, 0, buf.length);
             console.timeEnd('read 8');
 
-            var buf = new Buffer("xxxxxxxxxxxxxxxx");
+            var buf = newBuffer.new("xxxxxxxxxxxxxxxx");
             console.time('read 16');
             for (var i=0; i<1000000; i++) x = utf8.read(buf, 0, buf.length);
             console.timeEnd('read 16');
 
-            var buf = new Buffer("xxxxxxxxxxxxxxxxxxxxxxxx");
+            var buf = newBuffer.new("xxxxxxxxxxxxxxxxxxxxxxxx");
             // note: 2.3x faster to utf8.read from Uint8Array vs Buffer
             //buf = new Uint8Array(8);
             console.time('read 24');
@@ -256,4 +253,4 @@ module.exports = {
     },
 }
 
-function toHex(str) { return Buffer.from(str).toString('hex') }
+function toHex(str) { return newBuffer.new(str).toString('hex') }

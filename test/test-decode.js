@@ -7,8 +7,7 @@ var bson = require('./bson');
 
 // coverage-safe polyfills for node that need it
 eval('assert.deepStrictEqual = assert.deepStrictEqual || assert.deepEqual;');
-eval('if (!Buffer.alloc) Buffer.alloc = Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
-eval('if (parseInt(process.versions.node) < 6) { Object.defineProperty(Buffer, "from", { writable: true, value: function(a, b, c) { return new Buffer(a, b, c) } }) };');
+var newBuffer = require('../lib/new-buffer');
 
 // wrap unsupported language features in eval() to not crash during file parse
 function _tryEval(src) { try { return eval(str) } catch (e) { } }
@@ -35,7 +34,7 @@ var data = [
     function(x){ return x + 1234 },
 
     new qbson.MinKey(), new qbson.MaxKey(),
-    new Buffer("\x01\x00\x02"),
+    newBuffer.new("\x01\x00\x02"),
 
     // compound
     [], [1,2,3], [,,1,2,],
@@ -89,16 +88,16 @@ assert.equal(x.a(1), 135);
 //assert(/^function\s*(abc)\s*{ return 123 + ab }$/.test(x.a.valueOf().toString()));
 
 // objectId
-var x = qbson.decode(new Buffer([20, 0, 0, 0, 7, 0x61, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0]));
+var x = qbson.decode(newBuffer.new([20, 0, 0, 0, 7, 0x61, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0]));
 assert(x.a instanceof qbson.ObjectId);
 assert.equal(String(x.a), '0102030405060708090a0b0c');
 
 // obsolete undefined type
-var x = qbson.decode(new Buffer([8, 0, 0, 0, 6, 0x61, 0, 0]));
+var x = qbson.decode(newBuffer.new([8, 0, 0, 0, 6, 0x61, 0, 0]));
 assert.deepStrictEqual(x, { a: undefined });
 
 // unknown type
-assert.throws(function() { qbson.decode(new Buffer([7, 0, 0, 0, 0x55, 0, 0])) }, /unsupported bson .* 0x55/);
+assert.throws(function() { qbson.decode(newBuffer.new([7, 0, 0, 0, 0x55, 0, 0])) }, /unsupported bson .* 0x55/);
 
 // overran end
 assert.throws(function() { qbson.decode(qbson.encode({ a: {} }).slice(0, -1)) }, /overran/);
@@ -130,12 +129,12 @@ var buf, obj;
 // values that BSON handles differently
 var data = [
     undefined,
-    new Buffer("foobar"),
+    newBuffer.new("foobar"),
     /foo\x00bar/, /foo\x00\x00\x00bar/, /foo\x00\x00/mig,
 ];
 
 // Symbol
-buf = new Buffer([ 0x18, 0, 0, 0, 0x0e, 0x61, 0, 0x0c, 0, 0, 0, 0x53, 0x79, 0x6d, 0x62, 0x6f, 0x6c, 0x20, 0x4e, 0x61, 0x6d, 0x65, 0, 0 ]);
+buf = newBuffer.new([ 0x18, 0, 0, 0, 0x0e, 0x61, 0, 0x0c, 0, 0, 0, 0x53, 0x79, 0x6d, 0x62, 0x6f, 0x6c, 0x20, 0x4e, 0x61, 0x6d, 0x65, 0, 0 ]);
 obj = qbson.decode(buf);
 assert.equal(typeof obj.a, (typeof Symbol !== 'undefined') ? 'symbol' : 'string'); 
 _tryEval("assert.equal(obj.a.toString(), 'Symbol(Symbol Name)');");
