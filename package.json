@@ -4,6 +4,7 @@
   "description": "fast js-only bson encode / decode",
   "license": "Apache-2.0",
   "main": "qbson.js",
+  "files": ["lib", "qbson.js", "LICENSE", "README.md"],
 
   "author": "andrasq",
   "repository": { "type": "git", "url": "git://github.com/andrasq/node-qbson" },
