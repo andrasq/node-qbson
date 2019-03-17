@@ -67,9 +67,9 @@ bytes.putInt64(-0x200000001, buf, 0);
 assert.equal(bytes.getInt64(buf, 0), -0x200000001);
 
 var fp = Math.random();
-bytes.putFloat(fp, buf, 1);
+bytes.putFloat64(fp, buf, 1);
 assert.equal(buf.readDoubleLE(1), fp);
-assert.equal(bytes.getFloat(buf, 1), fp);
+assert.equal(bytes.getFloat64(buf, 1), fp);
 
 var entity = bytes.byteEntity();
 buf.write("0234\x00", 1);

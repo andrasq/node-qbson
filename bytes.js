@@ -27,31 +27,15 @@ var utf8 = require('./lib/utf8-2');
 module.exports = {
     byteEntity: function(){ return {val: 0, end: 0} },
 
-    // ---- get
     getInt32: getInt32,
-    getInt32LE: getInt32,
     getUInt32: getUInt32,
-    getUInt32LE: getUInt32,
-
     getInt64: getInt64,
-    getInt64LE: getInt64,
-
-    getFloat: getFloat,
     getFloat64: getFloat,
-    getFloat64LE: getFloat,
 
-    // ---- put
     putInt32: putInt32,
-    putInt32LE: putInt32,
     putUInt32: putInt32,
-    putUInt32LE: putInt32,
-
     putInt64: putInt64,
-    putInt64LE: putInt64,
-
-    putFloat: putFloat,
     putFloat64: putFloat,
-    putFloat64LE: putFloat,
 
     putString: putString,
     putStringZ: putStringZ,

@@ -25,7 +25,7 @@ var ScopedFunction = bsonTypes.ScopedFunction;
 
 var putInt32 = bytes.putInt32;
 var putInt64 = bytes.putInt64;
-var putFloat = bytes.putFloat64;
+var putFloat64 = bytes.putFloat64
 var putStringZ = bytes.putStringZ;
 var putStringZOverlong = bytes.putStringZOverlong;
 
@@ -148,7 +148,7 @@ function encodeEntity( name, value, target, offset ) {
         offset = putInt32(value, target, offset);
         break;
     case T_FLOAT:
-        offset = putFloat(value, target, offset);
+        offset = putFloat64(value, target, offset);
         break;
     case T_SYMBOL:
         // deprecated
