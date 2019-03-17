@@ -5,10 +5,10 @@ var BSON = require('./bson');
 var qbson = require('../qbson');
 var bson = require('./bson');
 
-// polyfills for node that need it
-assert.deepStrictEqual = assert.deepStrictEqual || assert.deepEqual;
-eval('var alloc = Buffer.allocUnsafe; Object.defineProperty(Buffer, "allocUnsafe", { value: alloc || function(n) { return new Buffer(n) } })');
-//eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && from || function(a, b, c) { return new Buffer(a, b, c) } });')
+// coverage-safe polyfills for node that need it
+eval('assert.deepStrictEqual = assert.deepStrictEqual || assert.deepEqual;');
+eval('if (!Buffer.allocUnsafe) Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
+eval('if (parseInt(process.versions.node) < 8) { delete Buffer.from; Buffer.from = function(a, b, c) { return new Buffer(a, b, c) } }');
 
 // wrap unsupported language features in eval() to not crash during file parse
 function _tryEval(src) { try { return eval(str) } catch (e) { } }
