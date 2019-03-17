@@ -3,13 +3,14 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-// npm install qtimeit bson buffalo 
+// npm install qtimeit bson buffalo https://github.com/andrasq/node-q-msgpack
 
 var qtimeit = require('qtimeit');
 
 var BSON = require('./bson');
 var qbson = require('../');
 var buffalo = require('buffalo');
+var msgpack = require('q-msgpack');
 
 var str250 = new Array(51).join('xxxxx');
 var str250utf8 = new Array(51).join('xxxx\x00ff');
@@ -45,21 +46,23 @@ var datasets = {
 //    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
     // ObjectId
     'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
+    'msgpack test': {"a":1.5,"b":"foo","c":[1,2],"d":true,"e":{}},
     //'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
     //'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
-    'anav2 item': anav2,
+    //'anav2 item': anav2,
     'anav2r item': anav2r,
 // FIXME: encode for this is *very* slow... because it exceeds the magic 100k fast-array limit? but only pushing chars!
 // A: because cannot array.write the string into the array, must copy byte-by-byte.  Or build a tree of objects, and just make a buffer out of long strings?
 //'test': { 'very large payload': 'x'.repeat(100000) }
 }
-var x;
+var x, jx, y, jy;
 
 function createBuffer(data) { return Buffer.from ? Buffer.from(data) : new Buffer(data) }
 
 qtimeit.bench.timeGoal = .4;
 qtimeit.bench.visualize = true;
 qtimeit.bench.showRunDetails = false;
+qtimeit.bench.baselineAvg = 500e3;
 //qtimeit.bench.showTestInfo = false;
 
 for (k in datasets) {
@@ -87,7 +90,10 @@ if (1)
             x = buffalo.serialize(data);
         },
         'json': function() {
-            x = createBuffer(JSON.stringify(data));
+            jx = createBuffer(JSON.stringify(data));
+        },
+        'q-msgpack': function() {
+            x = msgpack.encode(data);
         },
         'qbson': function() {
             x = qbson.encode(data);
@@ -103,7 +109,7 @@ if (1)
             y = buffalo.parse(bytes);
         },
         'json': function() {
-            y = JSON.parse(xj);
+            jy = JSON.parse(xj);
         },
         'qbson': function() {
             y = qbson.decode(bytes);
