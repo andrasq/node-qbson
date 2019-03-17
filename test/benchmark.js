@@ -7,8 +7,8 @@
 
 var qtimeit = require('qtimeit');
 
-var BSON = require('./test/bson');
-var qbson = require('./');
+var BSON = require('./bson');
+var qbson = require('../');
 var buffalo = require('buffalo');
 
 var str250 = new Array(51).join('xxxxx');
