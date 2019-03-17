@@ -68,14 +68,14 @@ var x = qbson.decode(buf);
 assert(x.a instanceof qbson.MaxKey);
 
 var id = new qbson.ObjectId();
-var buf = qbson.encode({ a: new qbson.DbRef("refname", new qbson.ObjectId("00112233445566778899aabb")) });
+var buf = qbson.encode({ a: new qbson.DbRef("refname", new qbson.ObjectId("112233445566778899aabbcc")) });
 var x = qbson.decode(buf);
 assert.equal(x.a.$ref, 'refname');
 assert(x.a.$id instanceof qbson.ObjectId);
-assert.equal(x.a.$id.toString(), '00112233445566778899aabb');
+assert.equal(x.a.$id.toString(), '112233445566778899aabbcc');
 var xx = bson.deserialize(buf);
-assert.equal(xx.a.db, 'refname');
-assert.equal(xx.a.oid.toString(), '00112233445566778899aabb');
+assert.ok(xx.a.db == 'refname' || xx.a.collection == 'refname');        // bson@4.0 breaking change to field names
+assert.equal(xx.a.oid.toString(), '112233445566778899aabbcc');
 
 var obj = new qbson.ScopedFunction( function(abc){ return 123 + ab }, { ab: 12 });
 var buf = qbson.encode({ a: obj });
