@@ -82,7 +82,7 @@ var buf = qbson.encode({ a: obj });
 var x = qbson.decode(buf);
 assert(x.a instanceof qbson.ScopedFunction);
 assert(typeof x.a.valueOf() === 'function');
-assert.deepEqual(x.a.valueOf()._scope, { ab: 12 });
+assert.deepEqual(x.a.valueOf().scope, { ab: 12 });
 assert.equal(x.a.valueOf().toString(), x.a.func);
 assert.equal((x.a.valueOf())(1), 135);
 // FIXME:

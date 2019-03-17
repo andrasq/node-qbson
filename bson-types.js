@@ -197,12 +197,12 @@ function ScopedFunction( func, scope ) {
 }
 ScopedFunction.prototype.valueOf = function valueOf( ) {
     var fn = makeFunction(this.func, this.scope);
-    fn._scope = this.scope;
+    fn.scope = this.scope;
     return fn;
 }
 
 /** bson extracts binary as an object Binary,
-// we extract Binary as a Buffer with property .subtype
+// NOTE: we extract Binary as a Buffer with property .subtype
 function Binary( buf, base, bound ) {
     this.parent = buf;
     this.base = base;
