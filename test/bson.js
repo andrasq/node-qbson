@@ -21,7 +21,12 @@ if (typeof bson == 'function') {
     serialize = new bson().serialize;
     deserialize = new bson().deserialize;
 }
-else if (typeof bson.BSONPure.BSON == 'function') {
+else if (typeof bson.serialize === 'function') {
+    ObjectID = bson.ObjectID;
+    serialize = bson.serialize;
+    deserialize = bson.deserialize;
+}
+else if (bson.BSONPure && typeof bson.BSONPure.BSON == 'function') {
     var obj = new bson.BSONPure.BSON()
     ObjectID = bson.ObjectID;
     serialize = function(o) { return obj.serialize(o) };
