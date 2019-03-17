@@ -3,7 +3,7 @@
 var assert = require('assert');
 var qbson = require('../qbson.js');
 
-var ObjectId = require('../object-id');
+var ObjectId = require('../lib/object-id');
 
 module.exports = {
     'pause for _getNow timers to expire': function(t) {

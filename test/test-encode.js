@@ -3,8 +3,8 @@
 var assert = require('assert');
 var util = require('util');
 var BSON = require('./bson');
-var qbson = require('../qbson');
-var bsonTypes = require('../bson-types');
+var qbson = require('../');
+var bsonTypes = require('../lib/bson-types');
 
 // wrap unsupported language features in eval() to not crash during file parse
 function _tryEval(src) { try { return eval(str) } catch (e) { } }

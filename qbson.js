@@ -9,9 +9,9 @@
 
 'use strict';
 
-var encode = require('./encode.js');
-var decode = require('./decode.js');
-var bsonTypes = require('./bson-types.js');
+var encode = require('./lib/encode.js');
+var decode = require('./lib/decode.js');
+var bsonTypes = require('./lib/bson-types.js');
 
 module.exports = {
     encode: encode,

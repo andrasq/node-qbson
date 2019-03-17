@@ -3,7 +3,7 @@
 var assert = require('assert');
 
 var qbson = require('../');
-var types = require('../bson-types');
+var types = require('../lib/bson-types');
 
 assert.equal(types.typeIds.T_FLOAT, 1);
 assert.equal(types.typeInfo[1].id, 1);
