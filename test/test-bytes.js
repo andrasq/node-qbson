@@ -1,7 +1,7 @@
 'use strict';
 
 var assert = require('assert');
-var bytes = require('../bytes');
+var bytes = require('../lib/bytes');
 
 var buf = new Buffer(16);
 var arr = new Array(16);
