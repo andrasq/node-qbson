@@ -7,8 +7,8 @@ var bson = require('./bson');
 
 // coverage-safe polyfills for node that need it
 eval('assert.deepStrictEqual = assert.deepStrictEqual || assert.deepEqual;');
-eval('if (!Buffer.allocUnsafe) Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
-eval('if (parseInt(process.versions.node) < 8) { delete Buffer.from; Buffer.from = function(a, b, c) { return new Buffer(a, b, c) } }');
+eval('if (!Buffer.alloc) Buffer.alloc = Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
+eval('if (parseInt(process.versions.node) < 6) { Object.defineProperty(Buffer, "from", { writable: true, value: function(a, b, c) { return new Buffer(a, b, c) } }) };');
 
 // wrap unsupported language features in eval() to not crash during file parse
 function _tryEval(src) { try { return eval(str) } catch (e) { } }

@@ -136,7 +136,7 @@ for (var i=0; i<items.length; i++) {
     assert.equal(bytes.toString('hex'), bson.toString('hex'), "test item " + i + ': ' + items[i] + ': ' + bytes.toString('hex') + ' vs bson ' + bson.toString('hex'));
 }
 
-var rex = parseInt(process.versions.node) >= 8 ? /foo/imsu : /foo/im;
+var rex = parseInt(process.versions.node) >= 8 ? new RegExp('foo', 'imsu') : /foo/im;
 var rexflags = parseInt(process.versions.node) >= 8 ? ['i', 'm', 's', 'u'] : ['i', 'm'];
 assert.deepEqual(qbson.decode(qbson.encode({ a: rex })).a, rex);
 rexflags.forEach(function(flag) { assert.deepEqual(qbson.decode(qbson.encode({ a: new RegExp('foo', flag) })).a, new RegExp('foo', flag)) });

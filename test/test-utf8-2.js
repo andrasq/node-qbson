@@ -9,7 +9,9 @@
 
 var utf8 = require('../lib/utf8-2');
 
-eval('var from = Buffer.from; Object.defineProperty(Buffer, "from", { value: (parseInt(process.versions.node) >= 7) && from || function(a, b, c) { return new Buffer(a, b, c) } });')
+// coverage-safe polyfills for node that need it
+eval('if (!Buffer.alloc) Buffer.alloc = Buffer.allocUnsafe = function(n) { return new Buffer(n) }');
+eval('if (parseInt(process.versions.node) < 6) { Object.defineProperty(Buffer, "from", { writable: true, value: function(a, b, c) { return new Buffer(a, b, c) } }) };');
 
 module.exports = {
     before: function(done) {
