@@ -76,13 +76,13 @@ var xx = bson.deserialize(buf);
 assert.ok(xx.a.db == 'refname' || xx.a.collection == 'refname');        // bson@4.0 breaking change to field names
 assert.equal(xx.a.oid.toString(), '112233445566778899aabbcc');
 
-var obj = function(abc){ return 123 + ab };
-obj.scope = { ab: 12 };
-var buf = qbson.encode({ a: obj });
+var func = function(abc){ return 123 + ab };
+func.scope = { ab: 12 };
+var buf = qbson.encode({ a: func });
 var x = qbson.decode(buf);
 assert(typeof x.a === 'function');
 assert.deepEqual(x.a.scope, { ab: 12 });
-assert.equal(String(x.a), String(obj));
+assert.equal(String(x.a), String(func));
 assert.equal(x.a(1), 135);
 // FIXME:
 //assert(/^function\s*(abc)\s*{ return 123 + ab }$/.test(x.a.valueOf().toString()));
