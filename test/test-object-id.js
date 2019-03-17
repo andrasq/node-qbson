@@ -36,7 +36,7 @@ id = ObjectId(new Buffer("123412341234"));
 assert.ok(id instanceof ObjectId);
 assert.equal(id.toString(), "313233343132333431323334");
 
-id = ObjectId.createFromBuffer(new Buffer([1,2,3,4,1,2,3,4,1,2,3,4]));
+id = new ObjectId(new Buffer([1,2,3,4,1,2,3,4,1,2,3,4]));
 assert.ok(id instanceof ObjectId);
 assert.equal(id.toString(), "010203040102030401020304");
 assert.equal(id.valueOf(), "010203040102030401020304");
