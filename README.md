@@ -40,32 +40,32 @@ All BSON data types are supported, even the deprecated ones (except Float128).  
 JavaScript native data types are automatically converted to the equivalent BSON type,
 non-native types are specified using helper classes (see below).
 
-- 1 float - javascript number, ieee 754 64-bit little-endian floating point value
-- 2 string - javascript string, utf8 text
-- 3 object - javascript Object, name-value mapping of bson entities
-- 4 array - javascript Array, list of bson entities
-- 5 binary - binary data in a Buffer.  The BSON binary subtype is specified as a
+- 1 **float** - javascript number, ieee 754 64-bit little-endian floating point value
+- 2 **string** - javascript string, utf8 text
+- 3 **object** - javascript Object, name-value mapping of bson entities
+- 4 **array** - javascript Array, list of bson entities
+- 5 **binary** - binary data in a Buffer.  The BSON binary subtype is specified as a
     property .subtype on the Buffer object.
-- 6 undefined - javascript undefined (deprecated)
-- 7 ObjectId - binary MongodDB object id, see below
-- 8 boolean - javascript true, false
-- 9 Date - javascript Date
-- 10 null - javascript null
-- 11 RegExp - javascript RegExp object
-- 12 DbRef - resource name string and ObjectId (deprecated)
-- 13 function - javascript code
-- 14 symbol - javascript Symbol
-- 15 function with scope - javascript code with scope.  The scope is specified
+- 6 **undefined** - javascript undefined (deprecated)
+- 7 **ObjectId** - binary MongodDB object id, see below
+- 8 **boolean** - javascript true, false
+- 9 **Date** - javascript Date
+- 10 **null** - javascript null
+- 11 **RegExp** - javascript RegExp object
+- 12 **DbRef** - resource name string and ObjectId (deprecated)
+- 13 **function** - javascript code
+- 14 **symbol** - javascript Symbol
+- 15 **function** with scope - javascript code with scope.  The scope is specified
      as a property .scope on the function itself.
-- 16 int - 32-bit little-endian signed integer.  Javascript numbers are
+- 16 **int** - 32-bit little-endian signed integer.  Javascript numbers are
      automatically stored as integers if their value would not be changed by
      coercion.  NaN, +/- Infinity and -0 (negative 0) are preserved.
-- 17 timestamp - 64-bit little-endian MongoDB timestamp, the high 32 bits being
+- 17 **timestamp** - 64-bit little-endian MongoDB timestamp, the high 32 bits being
      the seconds since the epoch, the low 32 a sequence number
-- 18 long - 64-bit little-endian signed integer
-- 19 float128 - (not supported)
-- 255 MinKey - MongoDB value that compares less than any other value
-- 127 MaxKey - MongoDB value that compares greater than any other value
+- 18 **long** - 64-bit little-endian signed integer
+- 19 **float128** - (not supported)
+- 255 **MinKey** - MongoDB value that compares less than any other value
+- 127 **MaxKey** - MongoDB value that compares greater than any other value
 
 
 Helper Classes
