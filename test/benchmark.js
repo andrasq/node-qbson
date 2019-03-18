@@ -32,11 +32,11 @@ var anav2 = {
 var datasets = {
 //    'int': 1234,
 //    'float': 1234.5,
-//    'text': "some \xfftf8 Text",
+    //'text': "some \xfftf8 Text",
     // 'text 250': new Array(51).join("xxxxx"),
-//    'text 250 20% utf8': new Array(51).join("xxxx\u00ff"),
-//    '{}': {},
-//    'regex': /fo[o]/i,
+    //'text 250 20% utf8': new Array(51).join("xxxx\u00ff"),
+    //'{}': {},
+    //'regex': /fo[o]/i,
 //    'array[5]': [1,2,3,4,5],
 //    'array[sparse 5]': [1,,,,5],
 //    'object[5]': {a:1,b:2,c:3,d:4,e:5},
@@ -45,24 +45,22 @@ var datasets = {
 //    'nested array[5]': [1,[2,[3,[4,[5]]]]],
 //    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
     // ObjectId
-    'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
-    'msgpack test': {"a":1.5,"b":"foo","c":[1,2],"d":true,"e":{}},
+//    'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
+//    'msgpack test': {"a":1.5,"b":"foo","c":[1,2],"d":true,"e":{}},
     //'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
     //'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
     //'anav2 item': anav2,
     'anav2r item': anav2r,
-// FIXME: encode for this is *very* slow... because it exceeds the magic 100k fast-array limit? but only pushing chars!
-// A: because cannot array.write the string into the array, must copy byte-by-byte.  Or build a tree of objects, and just make a buffer out of long strings?
 //'test': { 'very large payload': 'x'.repeat(100000) }
 }
-var x, jx, y, jy;
+var x, jx, y, jy, qx, qy;
 
 function createBuffer(data) { return Buffer.from ? Buffer.from(data) : new Buffer(data) }
 
 qtimeit.bench.timeGoal = .4;
 qtimeit.bench.visualize = true;
 qtimeit.bench.showRunDetails = false;
-qtimeit.bench.baselineAvg = 500e3;
+//qtimeit.bench.baselineAvg = 500e3;
 //qtimeit.bench.showTestInfo = false;
 
 for (k in datasets) {
@@ -70,7 +68,7 @@ for (k in datasets) {
     console.log("\n%s ----", k, JSON.stringify(data).slice(0, 400));
 
     var bytes = BSON.serialize(data);
-    // var bytes = qbson.encode(data);
+    var bytes = qbson.encode(data);
     var xj = createBuffer(JSON.stringify(data));
     var y;
 
@@ -96,7 +94,7 @@ if (1)
             x = msgpack.encode(data);
         },
         'qbson': function() {
-            x = qbson.encode(data);
+            qx = qbson.encode(data);
         },
     })
 
@@ -112,11 +110,12 @@ if (1)
             jy = JSON.parse(xj);
         },
         'qbson': function() {
-            y = qbson.decode(bytes);
+            qy = qbson.decode(bytes);
         },
     })
     qtimeit.bench.showPlatformInfo = false;
 }
 //console.log(x.length, JSON.stringify(x).slice(0, 400));
 //if (x) console.log(x.length, x);
-if (y) console.log(JSON.stringify(y).slice(0, 400));
+//if (y) console.log(JSON.stringify(y).slice(0, 400));
+if (qx) console.log(qx.length, qx, qbson.decode(qx));
