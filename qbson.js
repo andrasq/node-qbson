@@ -9,16 +9,13 @@
 
 'use strict';
 
-var encode = require('./lib/encode.js');
-var decode = require('./lib/decode.js');
 var bsonTypes = require('./lib/bson-types.js');
 
 module.exports = {
-    encode: encode,
-    decode: decode,
+    encode: require('./lib/encode.js'),
+    decode: require('./lib/decode.js'),
 
     ObjectId: bsonTypes.ObjectId,
-    ObjectID: bsonTypes.ObjectId,
     DbRef: bsonTypes.DbRef,
     Timestamp: bsonTypes.Timestamp,
     Long: bsonTypes.Long,
