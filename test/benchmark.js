@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-// npm install qtimeit bson buffalo https://github.com/andrasq/node-q-msgpack
+// npm install qtimeit bson buffalo https://github.com/andrasq/node-q-msgpack https://github.com/andrasq/node-json-simple
 
 var qtimeit = require('qtimeit');
 
@@ -11,6 +11,9 @@ var BSON = require('./bson');
 var qbson = require('../');
 var buffalo = require('buffalo');
 var msgpack = require('q-msgpack');
+var jss = require('json-simple');
+
+var newBuffer = require('../lib/new-buffer');
 
 var str250 = new Array(51).join('xxxxx');
 var str250utf8 = new Array(51).join('xxxx\x00ff');
@@ -57,7 +60,7 @@ var x, jx, y, jy, qx, qy;
 
 function createBuffer(data) { return Buffer.from ? Buffer.from(data) : new Buffer(data) }
 
-qtimeit.bench.timeGoal = .4;
+qtimeit.bench.timeGoal = 5;
 qtimeit.bench.visualize = true;
 qtimeit.bench.showRunDetails = false;
 //qtimeit.bench.baselineAvg = 500e3;
@@ -69,7 +72,7 @@ for (k in datasets) {
 
     var bytes = BSON.serialize(data);
     var bytes = qbson.encode(data);
-    var xj = createBuffer(JSON.stringify(data));
+    var xj = (JSON.stringify(data));
     var y;
 
 if (0)
@@ -87,14 +90,17 @@ if (1)
         'buffalo.serialize': function() {
             x = buffalo.serialize(data);
         },
-        'json': function() {
-            jx = createBuffer(JSON.stringify(data));
-        },
         'q-msgpack': function() {
             x = msgpack.encode(data);
         },
         'qbson': function() {
             qx = qbson.encode(data);
+        },
+        'json': function() {
+            jx = newBuffer.from(JSON.stringify(data));
+        },
+        'json-simple': function() {
+            x = newBuffer.from(jss.encode(data));
         },
     })
 
@@ -106,11 +112,14 @@ if (1)
         'buffalo.parse': function() {
             y = buffalo.parse(bytes);
         },
+        'qbson': function() {
+            qy = qbson.decode(bytes);
+        },
         'json': function() {
             jy = JSON.parse(xj);
         },
-        'qbson': function() {
-            qy = qbson.decode(bytes);
+        'json-simple': function() {
+            jy = jss.decode(xj);
         },
     })
     qtimeit.bench.showPlatformInfo = false;

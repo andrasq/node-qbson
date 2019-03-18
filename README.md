@@ -52,29 +52,33 @@ To run the benchmarks (or tests), check out the repo from github.
 - qbson 0.1.0 - this package
 - json 11.8.0 - nodejs builtin
 
+All timings used:
+qtimeit=0.21.0 node=11.8.0 v8=7.0.276.38-node.16 platform=linux kernel=4.9.0-0.bpo.4-amd64 up_threshold=false
+arch=ia32 mhz=4184 cpuCount=8 cpu="Intel(R) Core(TM) i7-6700K CPU @ 4.00GHz"
+
 Encoding.
 
-| data                    | bson | buffalo | q-msgpack | qbson | json |
-|-------------------------|------|--------:|----------:|------:|-----:|
-| {"a":1234}                                                     | 100 |  65 | 142 | 486 | 125 |
-| {"a":1234.5}                                                   | 100 |  80 | 178 | 557 | 116 |
-| {"a":[1,2,3,4,5]}                                              | 100 |  46 | 261 | 391 | 236 |
-| {"a":{"a":1,"b":2,"c":3,"d":4,"e":5}}                          | 100 |  60 | 201 | 617 | 182 |
-| {"a":[1,[2,[3,[4,[5]]]]]}                                      | 100 |  47 | 290 | 430 | 228 |
-| {"a":{"a":{"b":{"c":{"d":{"e":5}}}}}}                          | 100 |  71 | 208 | 455 | 183 |
-| {"a":{"a":"ABC","b":1,"c":"DEFGHI\xff","d":1234.567,"e":null}} | 100 |  63 | 213 | 388 | 176 |
+| data                    | bson | buffalo | q-msgpack | qbson | json | json-simple |
+|-------------------------|------|--------:|----------:|------:|-----:|------------:|
+| {"a":1234}                                                     | 100 | 121 | 142 | 368 | 125 | 215 |
+| {"a":1234.5}                                                   | 100 | 116 | 164 | 454 | 112 | 242 |
+| {"a":[1,2,3,4,5]}                                              | 100 |  87 | 248 | 366 | 226 | 253 |
+| {"a":{"a":1,"b":2,"c":3,"d":4,"e":5}}                          | 100 | 103 | 188 | 541 | 172 | 211 |
+| {"a":[1,[2,[3,[4,[5]]]]]}                                      | 100 |  84 | 256 | 412 | 229 | 352 |
+| {"a":{"a":{"b":{"c":{"d":{"e":5}}}}}}                          |
+| {"a":{"a":"ABC","b":1,"c":"DEFGHI\xff","d":1234.567,"e":null}} |
 
 Decoding.
 
-| data                    | bson | buffalo | q-msgpack | qbson | json |
-|-------------------------|------|--------:|----------:|------:|-----:|
-| {"a":1234}                                                     | 100 | 130 | - | 438 | 189 |
-| {"a":1234.5}                                                   | 100 | 118 | - | 545 |  24 |
-| {"a":[1,2,3,4,5]}                                              | 100 |  65 | - | 205 |  79 |
-| {"a":{"a":1,"b":2,"c":3,"d":4,"e":5}}                          | 100 | 125 | - | 546 |  92 |
-| {"a":[1,[2,[3,[4,[5]]]]]}                                      | 100 |  92 | - | 582 | 117 |
-| {"a":{"a":{"b":{"c":{"d":{"e":5}}}}}}                          | 100 | 128 | - | 449 |  68 |
-| {"a":{"a":"ABC","b":1,"c":"DEFGHI\xff","d":1234.567,"e":null}} | 100 | 122 | - | 383 |  58 |
+| data                    | bson | buffalo | q-msgpack | qbson | json | json-simple |
+|-------------------------|------|--------:|----------:|------:|-----:|------------:|
+| {"a":1234}                                                     | 100 | 136 | - | 421 |  61 | 132 |
+| {"a":1234.5}                                                   | 100 | 130 | - | 504 |  40 |  85 |
+| {"a":[1,2,3,4,5]}                                              | 100 |  65 | - | 196 | 123 | 258 |
+| {"a":{"a":1,"b":2,"c":3,"d":4,"e":5}}                          | 100 | 124 | - | 489 | 131 | 184 |
+| {"a":[1,[2,[3,[4,[5]]]]]}                                      |
+| {"a":{"a":{"b":{"c":{"d":{"e":5}}}}}}                          |
+| {"a":{"a":"ABC","b":1,"c":"DEFGHI\xff","d":1234.567,"e":null}} |
 
 
 To compare, here are the old timings, done with node-v5.10.1 on an 3.5GHz AMD Phenom II X4.
@@ -136,3 +140,4 @@ Related Work
 - [`bson`](https://github.com/mongodb/js-bson) - the "official" mongodb BSON driver
 - [`buffalo`](https://github.com/marcello3d/node-buffalo) - alternate js-only implementation, no longer maintained
 - [`q-msgpack`](https://github.com/andrasq/node-q-msgpack) - experimental msgpack encoder
+- [`json-simple`](https://github.com/andrasq/node-json-simple) - simplified experimental js-only json encoder
