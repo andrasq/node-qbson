@@ -116,10 +116,10 @@ time to revisit `json-simple`.
 
 To run the benchmarks (or tests), check out the repo from github.
 
-- bson 4.0.2 - latest official bson library
+- bson 4.0.2 - latest official bson library (requires node-v6 or newer)
 - buffalo 0.1.3 - old abandoned experiment
 - q-msgpack 0.1.0 (qmp) - experimental msgpack encoder (no decode)
-- qbson 0.1.0 - this package
+- qbson 0.1.0 - this package (works with older node, eg v0.8)
 - json 11.8.0 - nodejs builtin
 - json-simple 0.10.0 (jss) - simplified js-only json coder
 

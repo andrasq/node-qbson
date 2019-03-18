@@ -160,5 +160,9 @@ assert.deepEqual(qbson.decode(qbson.encode([[]])), [[]]);
 
 // 3-deep array
 var buf = qbson.encode({"": [[]]});
-console.log(buf);
 assert.deepEqual(qbson.decode(buf), {"": [[]]});
+
+// Float128
+var buf = qbson.encode({ a: new bsonTypes.Float128(1, 2, 3, 4) });
+//console.log(buf, BSON.deserialize(buf));
+assert.deepEqual(qbson.decode(buf), { a: new bsonTypes.Float128(1, 2, 3, 4) });

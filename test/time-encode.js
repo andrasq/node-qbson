@@ -1,4 +1,4 @@
-var bson_encode = require('../encode');
+var bson_encode = require('../lib/encode');
 
 var assert = require('assert');
 var util = require('util');

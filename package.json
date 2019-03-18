@@ -1,6 +1,6 @@
 {
   "name": "qbson",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "fast js-only bson encode / decode",
   "license": "Apache-2.0",
   "main": "qbson.js",

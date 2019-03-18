@@ -19,4 +19,7 @@ for (var i = 0; i < 1e12; i += Math.floor(Math.random() * 1e6)) checkLong(i);
 for (var i = 0; i > -1e12; i -= Math.floor(Math.random() * 1e6)) checkLong(i);
 
 var float128 = new qbson.Float128(1,2,3,4);
-assert.equal(float128.word2, 2);
+assert.equal(float128.hi, 1);
+assert.equal(float128.hi2, 2);
+assert.equal(float128.hi3, 3);
+assert.equal(float128.lo, 4);

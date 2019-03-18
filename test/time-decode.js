@@ -1,5 +1,5 @@
 var timeit = require('qtimeit');
-var bson_decode = require('../decode');
+var bson_decode = require('../lib/decode');
 
 var BSON = require('./bson');
 
