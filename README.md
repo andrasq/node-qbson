@@ -33,12 +33,46 @@ Deserialiaze the BSON data from the buffer (or array) and return the correspondi
 JavaScript object.
 
 
+Helper Classes
+--------------
+
+Some BSON entities are decoded into qbson-specific objects.  These objects have no intrinsic
+methods other than their constructor,
+
+### qbson.ObjectId( )
+
+BSON binary object id.  Can be constructed from a 24-char hex string, a 12-char binary
+string, or a buffer.
+
+### qbson.Long( hi, lo )
+
+64-bit integer value.  Its `toValue` method returns its contents as a native 53-bit
+javascript number.
+
+### qbson.Timestamp( hi, lo )
+
+BSON timestamp.  The high word is a 32-bit epoch timestamp (seconds elapsed since 1970-01-01 UTC),
+the low word a sequence number.
+
+### qbson.DbRef( refname, oid )
+
+Deprecated database reference, consisting of a resource name `$ref` and an ObjectId `$id`.
+
+### qbson.MinKey( )
+
+A MongoDB entity that is guaranteed to sort before any other entity.
+
+### qbson.MaxKey( )
+
+A MongoDB entity that is guaranteed to sort after every other entity.
+
+
 Benchmarks
 ----------
 
 Relative speed serializing and deserializing the data to and from BSON (or msgpack, or JSON.
-Includes JSON.stringify and q-msgpack timings for included for comparison.)  These are
-_rates_, higher is better.
+Includes JSON.stringify and q-msgpack timings for comparison.)  These are _rates_, higher is
+better.
 
 Used to be that the native JSON serialization was head and shoulders above the any
 user-space converter, but no longer.  In fact, most conversions outperform JSON.  Maybe it's
