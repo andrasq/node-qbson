@@ -71,8 +71,8 @@ non-native types are specified using helper classes (see below).
 Helper Classes
 --------------
 
-Some BSON entities are decoded into qbson-specific objects.  These objects have no intrinsic
-methods other than their constructor,
+Some BSON entities are decoded into qbson-specific objects.  These objects exist primarily
+to store bson data, most have no methods other than their constructor.
 
 ### qbson.ObjectId( )
 
@@ -80,19 +80,28 @@ BSON binary object id.  Can be constructed from a 24-char hex string, a 12-char 
 string, or a buffer.  If constructed without an argument, eg `new qbson.ObjectId()`, it
 will create a new id unique to this process.
 
-### qbson.Long( hi, lo )
+    oid1 = qbson.ObjectId();
+    oid2 = qbson.ObjectId("112233445566778899aabbcc");
+    oid3 = qbson.ObjectId([1,2,3,4,5,6,7,8,9,10,11,12]);
 
-64-bit integer value.  Its `toValue` method returns its contents as a native 53-bit
-javascript number.
+### qbson.DbRef( refname, oid )
+
+Deprecated database reference, consisting of a resource name `$ref` and an ObjectId `$id`.
 
 ### qbson.Timestamp( hi, lo )
 
 BSON timestamp.  The high word is a 32-bit epoch timestamp (seconds elapsed since 1970-01-01 UTC),
 the low word a sequence number.
 
-### qbson.DbRef( refname, oid )
+### qbson.Long( hi, lo )
 
-Deprecated database reference, consisting of a resource name `$ref` and an ObjectId `$id`.
+64-bit integer value.  It is read and written as two 4-byte unsigned integers.  Its
+`toValue` method returns it converted to a native javascript number.  The conversion
+may lose least significant bits, because a 64-bit float stores only 53 bits of precision.
+
+### qbson.Float128( hi, hi2, hi3, lo )
+
+128-bit ieee 754 floating point.  It is read and written as 4 4-byte unsigned integers.
 
 ### qbson.MinKey( )
 
