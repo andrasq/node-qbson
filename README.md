@@ -15,7 +15,7 @@ Fast forward a few years of nodejs changes and V8 optimization improvements, and
 comparison is even more favorable, qbson being quite competitive with or even beating JSON.
 
 Possibly this package should be called `wisent`, to follow the pattern set by `bson` and
-`buffalo` (it's a Euro-phone pun; think _bee'sown_ large wooly even-toed herbivore.)
+`buffalo` (it's a Euro-phone pun; think _bee'sown_.)
 
 
 API
