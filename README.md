@@ -36,7 +36,7 @@ JavaScript object.
 Supported Types
 ---------------
 
-All BSON data types are supported, even the deprecated ones (except Float128).  The
+All BSON data types are supported, even the deprecated ones.  The
 JavaScript native data types are automatically converted to the equivalent BSON type,
 non-native types are specified using helper classes (see below).
 
@@ -63,7 +63,7 @@ non-native types are specified using helper classes (see below).
 - 17 **timestamp** - 64-bit little-endian MongoDB timestamp, the high 32 bits being
      the seconds since the epoch, the low 32 a sequence number
 - 18 **long** - 64-bit little-endian signed integer
-- 19 **float128** - (not supported)
+- 19 **float128** - ieee 754 128-bit little-endian floating point
 - 255 **MinKey** - MongoDB value that compares less than any other value
 - 127 **MaxKey** - MongoDB value that compares greater than any other value
 
