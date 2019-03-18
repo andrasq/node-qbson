@@ -5,6 +5,7 @@ var util = require('util');
 var BSON = require('./bson');
 var qbson = require('../');
 var bsonTypes = require('../lib/bson-types');
+var bsonSize = require('../lib/bson-size');
 
 // wrap unsupported language features in eval() to not crash during file parse
 function _tryEval(src) { try { return eval(str) } catch (e) { } }
@@ -146,3 +147,18 @@ function MyClass() { this.a = 1; }
 var buf = qbson.encode({ a: new MyClass() });
 var buf2 = qbson.encode({ a: { a: 1 } });
 assert.deepEqual(buf, buf2);
+
+// guessSize
+assert.equal(bsonSize.guessSize([]), 5);
+assert.equal(qbson.encode([]).length, 5);
+assert.equal(bsonSize.guessSize([1]), 12);
+assert.equal(bsonSize.guessSize({}), 5);
+assert.equal(qbson.encode({}).length, 5);
+assert.equal(bsonSize.guessSize([[]]), 13);
+assert.equal(qbson.encode([[]]).length, 13);
+assert.deepEqual(qbson.decode(qbson.encode([[]])), [[]]);
+
+// 3-deep array
+var buf = qbson.encode({"": [[]]});
+console.log(buf);
+assert.deepEqual(qbson.decode(buf), {"": [[]]});

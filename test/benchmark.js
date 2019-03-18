@@ -48,12 +48,12 @@ var datasets = {
 //    'nested array[5]': [1,[2,[3,[4,[5]]]]],
 //    'nested object[5]': {a:{b:{c:{d:{e:5}}}}},
     // ObjectId
-//    'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
+    'canonical test object': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null },
 //    'msgpack test': {"a":1.5,"b":"foo","c":[1,2],"d":true,"e":{}},
     //'test object with text 250 20%utf8': { a: "ABC", b: 1, c: "DEFGHI\xff", d: 12345.67e-1, e: null, f: str250utf8 },
     //'teeeest object': { aaaa: "ABC", bbbb: 1, cccc: "DEFGHI\xff", dddd: 12345.67e-1, eeee: null },
     //'anav2 item': anav2,
-    'anav2r item': anav2r,
+//    'anav2r item': anav2r,
 //'test': { 'very large payload': 'x'.repeat(100000) }
 }
 var x, jx, y, jy, qx, qy;

@@ -20,7 +20,6 @@ module.exports = {
     ObjectId: bsonTypes.ObjectId,
     ObjectID: bsonTypes.ObjectId,
     DbRef: bsonTypes.DbRef,
-    ScopedFunction: bsonTypes.ScopedFunction,
     Timestamp: bsonTypes.Timestamp,
     Long: bsonTypes.Long,
     Float128: bsonTypes.Float128,
