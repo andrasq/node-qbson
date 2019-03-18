@@ -77,7 +77,8 @@ methods other than their constructor,
 ### qbson.ObjectId( )
 
 BSON binary object id.  Can be constructed from a 24-char hex string, a 12-char binary
-string, or a buffer.
+string, or a buffer.  If constructed without an argument, eg `new qbson.ObjectId()`, it
+will create a new id unique to this process.
 
 ### qbson.Long( hi, lo )
 
