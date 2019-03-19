@@ -78,7 +78,7 @@ to store bson data, most have no methods other than their constructor.
 
 BSON binary object id.  Can be constructed from a 24-char hex string, a 12-char binary
 string, or a buffer.  If constructed without an argument, eg `new qbson.ObjectId()`, it
-will create a new id unique to this process.
+will be assigned an id value unique to this process.
 
     oid1 = qbson.ObjectId();
     oid2 = qbson.ObjectId("112233445566778899aabbcc");
