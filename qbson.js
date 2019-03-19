@@ -19,7 +19,7 @@ module.exports = {
     DbRef: bsonTypes.DbRef,
     Timestamp: bsonTypes.Timestamp,
     Long: bsonTypes.Long,
-    Float128: bsonTypes.Float128,
+    Decimal128: bsonTypes.Decimal128,
     MinKey: bsonTypes.MinKey,
     MaxKey: bsonTypes.MaxKey,
 };

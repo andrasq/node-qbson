@@ -57,8 +57,8 @@ module.exports = {
     },
 
     'plausible by existence': {
-        'Float128': function(t) {
-            var item = { a: new qbson.Float128(1, 2, 3, 4) };
+        'Decimal128': function(t) {
+            var item = { a: new qbson.Decimal128(1, 2, 3, 4) };
             var bufq = qbson.encode(item);
             t.equal(typeof bson.deserialize(bufq).a, 'object');
             t.deepEqual(qbson.decode(bufq), item);

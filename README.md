@@ -63,7 +63,7 @@ non-native types are specified using helper classes (see below).
 - 17 **timestamp** - 64-bit little-endian MongoDB timestamp, the high 32 bits being
      the seconds since the epoch, the low 32 a sequence number
 - 18 **long** - 64-bit little-endian signed integer
-- 19 **float128** - ieee 754 128-bit little-endian floating point
+- 19 **decimal128** - ieee 754 128-bit little-endian decimal floating point
 - 255 **MinKey** - MongoDB value that compares less than any other value
 - 127 **MaxKey** - MongoDB value that compares greater than any other value
 
@@ -99,7 +99,7 @@ the low word a sequence number.
 `toValue` method returns it converted to a native javascript number.  The conversion
 may lose least significant bits, because a 64-bit float stores only 53 bits of precision.
 
-### qbson.Float128( hi, hi2, hi3, lo )
+### qbson.Decimal128( hi, hi2, hi3, lo )
 
 128-bit ieee 754 floating point.  It is read and written as 4 4-byte unsigned integers.
 
