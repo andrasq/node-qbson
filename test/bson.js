@@ -1,5 +1,6 @@
 /*
  * shim to unify the apis of the various incarnations of the bson package
+ * Originally from the qbson package.
  *
  * Copyright (C) 2017-2019 Andras Radics
  * Licensed under the Apache License, Version 2.0
