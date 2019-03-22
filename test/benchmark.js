@@ -12,6 +12,12 @@ var qbson = require('../');
 var buffalo = require('buffalo');
 var msgpack = require('q-msgpack');
 var jss = require('json-simple');
+var Bsonext = tryRequire('bson-ext');
+var bsonext = Bsonext && new Bsonext([Bsonext.Binary, Bsonext.Code, Bsonext.DBRef, Bsonext.Decimal128, Bsonext.Double, Bsonext.Int32, Bsonext.Long, Bsonext.Map, Bsonext.MaxKey, Bsonext.MinKey, Bsonext.ObjectId, Bsonext.BSONRegExp, Bsonext.Symbol, Bsonext.Timestamp]);;
+var msgpackjavascript = tryRequire('/home/andras/src/msgpack-javascript.git/');
+var bion = require('bion');
+
+function tryRequire(name) { try { return require(name) } catch (e) { return null } }
 
 var newBuffer = require('../lib/new-buffer');
 
@@ -74,6 +80,8 @@ for (k in datasets) {
     var bytes = BSON.serialize(data);
     var bytes = qbson.encode(data);
     var xj = (JSON.stringify(data));
+    var msgpackbytes = newBuffer.from(msgpackjavascript.pack(data));
+    var bionbytes = bion.encode(data);
     var y;
 
 if (0)
@@ -84,6 +92,8 @@ if (0)
     })
 
 if (1)
+    console.log("");
+    console.log("encode:");
     qtimeit.bench({
         'bson': function() {
             x = BSON.serialize(data);
@@ -103,9 +113,21 @@ if (1)
         'json-simple': function() {
             x = newBuffer.from(jss.encode(data));
         },
+        'bson-ext': function() {
+            if (!bsonext) return;
+            x = bsonext.serialize(data);
+        },
+        'msgpackjavascript': function() {
+            x = newBuffer.from(msgpackjavascript.pack(data));
+        },
+        'bion': function() {
+            x = bion.encode(data);
+        },
     })
 
 if (1)
+    console.log("");
+    console.log("decode:");
     qtimeit.bench({
         'bson': function() {
             y = BSON.deserialize(bytes);
@@ -121,6 +143,16 @@ if (1)
         },
         'json-simple': function() {
             jy = jss.decode(xj);
+        },
+        'bson-ext': function() {
+            if (!bsonext) return;
+            y = bsonext.deserialize(bytes);
+        },
+        'msgpackjavascript': function() {
+            y = msgpackjavascript.unpack(msgpackbytes);
+        },
+        'bion': function() {
+            y = bion.decode(bionbytes);
         },
     })
     qtimeit.bench.showPlatformInfo = false;
