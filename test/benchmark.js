@@ -16,6 +16,7 @@ var Bsonext = tryRequire('bson-ext');
 var bsonext = Bsonext && new Bsonext([Bsonext.Binary, Bsonext.Code, Bsonext.DBRef, Bsonext.Decimal128, Bsonext.Double, Bsonext.Int32, Bsonext.Long, Bsonext.Map, Bsonext.MaxKey, Bsonext.MinKey, Bsonext.ObjectId, Bsonext.BSONRegExp, Bsonext.Symbol, Bsonext.Timestamp]);;
 var msgpackjavascript = tryRequire('/home/andras/src/msgpack-javascript.git/');
 var bion = require('bion');
+var qxpack = tryRequire('../dev/qxpack');
 
 function tryRequire(name) { try { return require(name) } catch (e) { return null } }
 
@@ -82,6 +83,7 @@ for (k in datasets) {
     var xj = (JSON.stringify(data));
     var msgpackbytes = newBuffer.from(msgpackjavascript.pack(data));
     var bionbytes = bion.encode(data);
+    if (qxpack) var qxbyte = qxpack.encode(data);
     var y;
 
 if (0)
@@ -123,6 +125,9 @@ if (1)
         'bion': function() {
             x = bion.encode(data);
         },
+        'qxpack': function() {
+            x = qxpack.encode(data);
+        },
     })
 
 if (1)
@@ -154,10 +159,13 @@ if (1)
         'bion': function() {
             y = bion.decode(bionbytes);
         },
+        'qxpack': function() {
+            y = qxpack.decode(qxbyte);
+        },
     })
     qtimeit.bench.showPlatformInfo = false;
 }
 //console.log(x.length, JSON.stringify(x).slice(0, 400));
 //if (x) console.log(x.length, x);
-//if (y) console.log(JSON.stringify(y).slice(0, 400));
-if (qx) console.log(qx.length, qx, qbson.decode(qx));
+if (y) console.log(JSON.stringify(y).slice(0, 400));
+//if (qx) console.log(qx.length, qx, qbson.decode(qx));
