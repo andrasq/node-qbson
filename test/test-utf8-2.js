@@ -251,6 +251,49 @@ module.exports = {
             t.done();
         },
     },
+
+    'utf8.byteLength': {
+        'should return length of each char': function(t) {
+            for (var i=0; i<65536; i++) {
+                var ch = String.fromCharCode(i);
+                t.equal(utf8.byteLength(ch), Buffer.byteLength(ch));
+            }
+            t.done();
+        },
+
+        'should return length as overlong': function(t) {
+            t.equal(utf8.byteLength("abc"), 3);
+            t.equal(utf8.byteLength("a\x00c", null, null, true), 4);
+            t.done();
+        },
+
+        'should return length of valid and invalid surrogate pairs': function(t) {
+            var pairs = [
+                "\uD800\uDC00",         // valid
+                "\uD800\uDC00a",        // valid, a
+                "a\uD800\uDC00",        // a, valid
+                "a\uD800\uDC00b",       // a, valid, b
+                "\uD800a",              // invalid, a
+                "a\uD800",              // a, invalid
+                "a\uD800b",             // a, invalid, b
+                "\uDC00\uD800",         // invalid, invalid
+            ];
+            for (var i=0; i<pairs.length; i++) {
+                t.equal(utf8.byteLength(pairs[i]), Buffer.byteLength(pairs[i]));
+            }
+            t.done();
+        },
+
+        'should return length between base and bound': function(t) {
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c"), 8);
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c", null, null, true), 9);
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c", 1, 3), 4);
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c", 1, 4), 5);
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c", 1, 5), 6);
+            t.equal(utf8.byteLength("ab\uD800\uDC00\x00c", 1, 5, true), 7);
+            t.done();
+        },
+    },
 }
 
 function toHex(str) { return newBuffer.new(str).toString('hex') }
