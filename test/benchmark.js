@@ -14,7 +14,7 @@ var msgpack = require('q-msgpack');
 var jss = require('json-simple');
 var Bsonext = tryRequire('bson-ext');
 var bsonext = Bsonext && new Bsonext([Bsonext.Binary, Bsonext.Code, Bsonext.DBRef, Bsonext.Decimal128, Bsonext.Double, Bsonext.Int32, Bsonext.Long, Bsonext.Map, Bsonext.MaxKey, Bsonext.MinKey, Bsonext.ObjectId, Bsonext.BSONRegExp, Bsonext.Symbol, Bsonext.Timestamp]);;
-var msgpackjavascript = tryRequire('/home/andras/src/msgpack-javascript.git/');
+var msgpackjs = require('msgpackjs');
 var bion = require('bion');
 var qxpack = tryRequire('../dev/qxpack');
 
@@ -80,8 +80,8 @@ for (k in datasets) {
 
     var bytes = BSON.serialize(data);
     var bytes = qbson.encode(data);
-    var xj = (JSON.stringify(data));
-    var msgpackbytes = newBuffer.from(msgpackjavascript.pack(data));
+    var xj = JSON.stringify(data);      // note: json does not use Buffers, but it doesnt need them
+    var msgpackbytes = newBuffer.from(msgpackjs.pack(data));
     var bionbytes = bion.encode(data);
     if (qxpack) var qxbyte = qxpack.encode(data);
     var y;
@@ -113,14 +113,14 @@ if (1)
             jx = newBuffer.from(JSON.stringify(data));
         },
         'json-simple': function() {
-            x = newBuffer.from(jss.encode(data));
+            x = jss.encode(data);
         },
         'bson-ext': function() {
             if (!bsonext) return;
             x = bsonext.serialize(data);
         },
-        'msgpackjavascript': function() {
-            x = newBuffer.from(msgpackjavascript.pack(data));
+        'msgpackjs': function() {
+            x = newBuffer.from(msgpackjs.pack(data));
         },
         'bion': function() {
             x = bion.encode(data);
@@ -153,8 +153,8 @@ if (1)
             if (!bsonext) return;
             y = bsonext.deserialize(bytes);
         },
-        'msgpackjavascript': function() {
-            y = msgpackjavascript.unpack(msgpackbytes);
+        'msgpackjs': function() {
+            y = msgpackjs.unpack(msgpackbytes);
         },
         'bion': function() {
             y = bion.decode(bionbytes);
