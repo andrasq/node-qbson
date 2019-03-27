@@ -86,7 +86,7 @@ will be assigned an id value unique to this process.
 
 ### qbson.DbRef( refname, oid )
 
-Deprecated database reference, consisting of a resource name `$ref` and an ObjectId `$id`.
+Deprecated database reference, consisting of a resource name and an ObjectId.
 
 ### qbson.Timestamp( hi, lo )
 
@@ -101,15 +101,15 @@ may lose least significant bits, because a 64-bit float stores only 53 bits of p
 
 ### qbson.Decimal128( hi, hi2, hi3, lo )
 
-128-bit ieee 754 floating point.  It is read and written as 4 4-byte unsigned integers.
+128-bit ieee 754 decimal floating point.  It is read and written as 4 4-byte unsigned integers.
 
 ### qbson.MinKey( )
 
-A MongoDB entity that is guaranteed to sort before any other entity.
+A MongoDB entity whose Mongo sort order is before any other entity.
 
 ### qbson.MaxKey( )
 
-A MongoDB entity that is guaranteed to sort after every other entity.
+A MongoDB entity whose Mongo sort order is after every other entity.
 
 
 Benchmarks
