@@ -39,8 +39,6 @@ module.exports = {
             for (var i = 0; i < tests.length; i++) {
                 var sysLength = sysbuf.write(tests[i]);
                 var length = utf8.write(buf, 0, tests[i]);
-//console.log(length, buf.slice(0, length));
-//console.log(sysLength, sysbuf.slice(0, sysLength));
                 t.equal(sysLength, length, " test " + i);
                 t.equal(buf.toString('utf8', 0, length), sysbuf.toString('utf8', 0, sysLength), " test " + i);
             }
@@ -61,6 +59,11 @@ module.exports = {
 
                 var n = sysbuf.write('a' + ch + 'b');
                 t.equal(utf8.write(buf, 0, 'a' + ch + 'b'), n);
+                t.equal(buf.toString('utf8', 0, n), sysbuf.toString('utf8', 0, n));
+
+                var s = String.fromCharCode(0xD800 + i%1024) + String.fromCharCode(0xDC00 + i%1024);
+                var n = sysbuf.write(s);
+                t.equal(utf8.write(buf, 0, s), n);
                 t.equal(buf.toString('utf8', 0, n), sysbuf.toString('utf8', 0, n));
             }
 
