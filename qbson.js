@@ -14,6 +14,7 @@ var bsonTypes = require('./lib/bson-types.js');
 module.exports = {
     encode: require('./lib/encode.js'),
     decode: require('./lib/decode.js'),
+// TBD:    toJsonString: require('./lib/json').toJsonString,
 
     ObjectId: bsonTypes.ObjectId,
     DbRef: bsonTypes.DbRef,
