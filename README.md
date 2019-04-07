@@ -49,7 +49,7 @@ non-native types are specified using helper classes (see below).
 - 6 **undefined** - javascript undefined (deprecated)
 - 7 **ObjectId** - binary MongodDB object id, see below
 - 8 **boolean** - javascript true, false
-- 9 **Date** - javascript Date
+- 9 **Date** - javascript Date, stored as 64-bit milliseconds since the epoch
 - 10 **null** - javascript null
 - 11 **RegExp** - javascript RegExp object
 - 12 **DbRef** - resource name string and ObjectId (deprecated)
